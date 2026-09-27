@@ -123,3 +123,21 @@ def test_status_shows_brewing_during_a_shot():
     det = ready_machine()
     feed(det, shot(1000)[:5])
     assert det.current_status(T0 + 1012) == "brewing"
+
+
+def test_heater_transition_readings_are_not_a_shot():
+    # Real data, 18 Sep 14:18:58-14:19:14: keep-warm bursts sampled mid-switch give
+    # 319/310/262 W readings within 10 s of each other, but no pump + heater reading.
+    det = ready_machine()
+    s = [(1000, 319, True), (1004, 1314, True), (1007, 716, True), (1009, 310, True),
+         (1016, 262, True), (1046, 138, True), (1052, 125, True), (1055, 1404, True), (1057, 121, True)]
+    ev = feed(det, s + idle_until(1100, 1600))
+    assert "shotFinished" not in types(ev)
+
+
+def test_pump_alone_shot_counts_without_pump_heater_readings():
+    # e.g. a machine whose pump + heater can't be separated (pumpHeaterMinW out of reach)
+    det = ready_machine()
+    s = [(1000 + k, 233, True) for k in range(0, 27, 3)] + [(1027, 1.5, True)]
+    ev = feed(det, s + idle_until(1060, 1500))
+    assert types(ev).count("shotFinished") == 1

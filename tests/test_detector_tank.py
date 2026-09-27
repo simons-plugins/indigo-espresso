@@ -166,3 +166,22 @@ def test_reset_counters():
     det.shots_today, det.shots_total, det.steams_today = 1, 2, 3
     det.reset_counters()
     assert (det.shots_today, det.shots_total, det.steams_today) == (0, 0, 0)
+
+
+def test_eco_timer_counts_from_actual_steaming_not_the_steam_window():
+    # Shot ends ~1033, steaming 1036-1090. The Bianca sleeps 29 min after the last use;
+    # that must read as eco even though the 3-minute steam window ended at ~1213.
+    det = Detector(BIANCA)
+    warm_on(det)
+    s = []
+    for k in range(200, 990, 40):
+        s += [(k, 1390, True), (k + 3, 1.5, True)]
+    s += [(1000, 233, True)] + [(1000 + k, 1565, True) for k in range(3, 24, 3)] + [(1027, 238, True), (1030, 1.6, True)]
+    s += [(1036 + k, 1265, True) for k in range(0, 55, 3)] + [(1091, 1.6, True)]
+    for k in range(1130, 1090 + 29 * 60, 40):
+        s += [(k, 1390, True), (k + 3, 1.5, True)]
+    ev = feed(det, s)
+    ev += ticks(det, 1090 + 29 * 60 + 5, 15 * 60)
+    assert "shotFinished" in types(ev) and "steamFinished" in types(ev)
+    assert "ecoEntered" in types(ev)
+    assert "tankEmpty" not in types(ev)

@@ -12,7 +12,9 @@ import statistics
 PUMP_GAP_S = 10            # pump readings closer than this are one run
 SAMPLE_S = 3               # the plug's reporting interval, added to run lengths
 MIN_RUN_READINGS = 3       # a shot has at least this many pump readings...
-MIN_RUN_S = 12             # ...and lasts at least this long
+MIN_RUN_S = 12             # ...and lasts at least this long...
+MIN_PUMP_ONLY_READINGS = 6 # ...and includes a pump + heater reading, or this many pump readings
+                           # (heater bursts sampled mid-switch give stray pump-band readings)
 STARTUP_FILL_S = 90        # pump runs this soon after switch-on fill the steam boiler
 STEAM_WINDOW_S = 180       # steaming counts if it happens within this after a shot
 STEAM_MIN_S = 20
@@ -77,6 +79,7 @@ class Detector:
         self.steam_window_end = None
         self.steam_acc = 0.0
         self.steam_confirmed = False
+        self.steam_last = None
 
     # ---- public -----------------------------------------------------------
     def classify(self, watts):
@@ -105,11 +108,12 @@ class Detector:
         self._track_heater(t, watts)
         cls = self.classify(watts)
         if cls in (PUMP, PUMPHEAT) and self.status != "off":
-            if self.ep and t - self.ep["last"] <= PUMP_GAP_S:
-                self.ep["last"] = t
-                self.ep["n"] += 1
-            else:
-                self.ep = {"start": t, "last": t, "n": 1}
+            if not (self.ep and t - self.ep["last"] <= PUMP_GAP_S):
+                self.ep = {"start": t, "last": t, "n": 0, "heat": 0}
+            self.ep["last"] = t
+            self.ep["n"] += 1
+            if cls == PUMPHEAT:
+                self.ep["heat"] += 1
         self.last_t, self.last_watts = t, watts
         return events
 
@@ -184,6 +188,7 @@ class Detector:
     def _hold(self, watts, t0, t1):
         if self.steam_window_end and t0 <= self.steam_window_end and self.classify(watts) == STEAM:
             self.steam_acc += min(t1 - t0, HOLD_CAP_S)
+            self.steam_last = t1
 
     def _on_draw(self, t, watts):
         events = []
@@ -243,7 +248,7 @@ class Detector:
         if t > self.steam_window_end:
             if self.steam_confirmed:
                 self.steams_today += 1
-                self.last_user_activity = self.steam_window_end
+                self.last_user_activity = self.steam_last
                 events.append({"type": "steamFinished", "t": t})
             self.steam_window_end = None
             self.steam_acc = 0.0
@@ -259,6 +264,8 @@ class Detector:
             events += self._check_tank_low(ep["last"])
         if ep["n"] < MIN_RUN_READINGS or seconds < MIN_RUN_S:
             return events
+        if ep["heat"] == 0 and ep["n"] < MIN_PUMP_ONLY_READINGS:
+            return events
         switched_on_just_now = (
             self.heat_start is not None
             and ep["start"] - self.heat_start < STARTUP_FILL_S
@@ -272,6 +279,7 @@ class Detector:
         self.steam_window_end = end + STEAM_WINDOW_S
         self.steam_acc = 0.0
         self.steam_confirmed = False
+        self.steam_last = None
         return events
 
     def _resolve_pending(self, force_shots):
