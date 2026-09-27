@@ -1,6 +1,6 @@
 # Espresso Monitor — design
 
-Date: 2026-09-27. Status: draft for review.
+Date: 2026-09-27. Status: approved by Simon 2026-09-27.
 
 ## Purpose
 
@@ -201,7 +201,8 @@ The device config has a "Load preset" button that fills the threshold fields.
 
 ## Repo and release
 
-`simons-plugins/indigo-espresso`, public. `Espresso.indigoPlugin/`,
+`simons-plugins/indigo-espresso`, public. Plugin name **Espresso Monitor**
+(`Espresso Monitor.indigoPlugin/`),
 `tests/`, `README.md`, `CHANGELOG.md`, CI copied from indigo-xbox (tests,
 version-check, create-release). Bundle id
 `com.simons-plugins.indigo-espresso`, version `2026.0.1`. Developed on jarvis
