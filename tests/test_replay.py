@@ -50,10 +50,10 @@ def test_backflush_sep26():
     ev = replay.run(d, replay.load("sep26-backflush.csv"))
     bf = replay.of(ev, "backflushFinished")
     assert len(bf) == 1 and at(26, "16:20") <= bf[0]["t"] <= at(26, "16:40")
-    # Accepted trade-off of the 2-minute confirmation wait (issue #3): the first cycle came
-    # 5.5 min before the rest, so it counts as one shot. The later cycles never do.
-    stray = [s for s in replay.of(ev, "shotFinished") if at(26, "16:20") <= s["start"] <= at(26, "16:40")]
-    assert len(stray) <= 1 and all(s["start"] < at(26, "16:24") for s in stray)
+    # 16:23 was a real (short, gushing) shot followed by a flush, confirmed by Simon; the
+    # backflush started 5.5 min later. Only that shot counts; no backflush cycle does.
+    shots = [s for s in replay.of(ev, "shotFinished") if at(26, "16:20") <= s["start"] <= at(26, "16:40")]
+    assert len(shots) == 1 and shots[0]["start"] < at(26, "16:24")
 
 
 def test_tank_ran_dry_sep26_morning():
