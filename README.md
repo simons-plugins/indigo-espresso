@@ -36,8 +36,9 @@ Steaming finished, Backflush finished, Entered eco, Tank empty, Tank low, Tank r
 
 ## How a few things work
 
-- **Shots** are confirmed, not instant: a shot is counted as soon as steaming follows it, or about 6 minutes
-  later if not. Three or more pump runs within 6 minutes are a **backflush** and are never counted as shots.
+- **Shots** are confirmed, not instant: a shot is counted as soon as steaming follows it, or about 2 minutes
+  later if not. Three or more pump runs each within 2 minutes of the last are a **backflush** and are not
+  counted as shots (a backflush cycle more than 2 minutes before the next one may count as a shot).
 - **Tank low** is learned. Each time the tank runs dry and is refilled, the plugin records how many pump-seconds
   that tank lasted and warns at 85 % of the median of the last three. It stays quiet until it has learned one
   tankful. If you top up early, use **Mark tank refilled** — that resets the count without teaching the plugin a

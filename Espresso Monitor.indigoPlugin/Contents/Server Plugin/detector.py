@@ -18,7 +18,8 @@ MIN_PUMP_ONLY_READINGS = 6 # ...and includes a pump + heater reading, or this ma
 STARTUP_FILL_S = 90        # pump runs this soon after switch-on fill the steam boiler
 STEAM_WINDOW_S = 180       # steaming counts if it happens within this after a shot
 STEAM_MIN_S = 20
-BACKFLUSH_WINDOW_S = 360   # pump runs this close together may be one backflush
+BACKFLUSH_WINDOW_S = 120   # pump runs this close together may be one backflush; an espresso
+                           # with no milk is confirmed this long after the shot
 BACKFLUSH_MIN_RUNS = 3
 BURST_MAX_S = 15           # heater runs up to this long are keep-warm bursts
 READY_SETTLE_S = 90        # this long with only keep-warm bursts => ready
@@ -243,7 +244,7 @@ class Detector:
         if self.ep and t - self.ep["last"] > PUMP_GAP_S:
             events += self._close_episode()
         events += self._advance_steam(t)
-        if self.pending and t - self.pending[-1]["end"] >= BACKFLUSH_WINDOW_S:
+        if self.pending and self.ep is None and t - self.pending[-1]["end"] >= BACKFLUSH_WINDOW_S:
             events += self._resolve_pending(force_shots=False)
         events += self._advance_status(t)
         return events

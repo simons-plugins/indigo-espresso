@@ -1,4 +1,8 @@
 # Changelog
 
+## 2026.0.2
+- An espresso without milk is now recorded about 2 minutes after the shot (was 6).
+- Fix: a pump run still in progress no longer lets earlier runs be decided as shots - a long backflush cycle could split a backflush into shots.
+
 ## 2026.0.1
 - First release: status device, events and counters for a Lelit Bianca V3; unverified Lelit Elizabeth preset.
