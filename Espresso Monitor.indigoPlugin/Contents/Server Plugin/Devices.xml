@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+<Devices>
+    <Device type="custom" id="espressoMachine">
+        <Name>Espresso Machine</Name>
+        <ConfigUI>
+            <Field id="powerDeviceId" type="menu">
+                <Label>Power device:</Label>
+                <List class="self" method="powerDeviceMenu" dynamicReload="true"/>
+            </Field>
+            <Field id="powerHelp" type="label" fontSize="small" fontColor="darkgray">
+                <Label>The smart plug or meter the machine is plugged into. It must report power (curEnergyLevel).</Label>
+            </Field>
+            <Field id="sep1" type="separator"/>
+            <Field id="preset" type="menu" defaultValue="biancaV3">
+                <Label>Machine model:</Label>
+                <List class="self" method="presetMenu"/>
+            </Field>
+            <Field id="loadPresetButton" type="button">
+                <Label> </Label>
+                <Title>Load preset values</Title>
+                <CallbackMethod>loadPreset</CallbackMethod>
+            </Field>
+            <Field id="presetHelp" type="label" fontSize="small" fontColor="darkgray">
+                <Label>Fills the fields below. Unverified presets are estimates from published specs - turn on raw logging and send a session to tune them.</Label>
+            </Field>
+            <Field id="sep2" type="separator"/>
+            <Field id="idleMaxW" type="textfield" defaultValue="20"><Label>Idle at or below (W):</Label></Field>
+            <Field id="pumpMinW" type="textfield" defaultValue="150"><Label>Pump alone, from (W):</Label></Field>
+            <Field id="pumpMaxW" type="textfield" defaultValue="350"><Label>Pump alone, to (W):</Label></Field>
+            <Field id="steamMinW" type="textfield" defaultValue="1150"><Label>Steam heater, from (W):</Label></Field>
+            <Field id="steamMaxW" type="textfield" defaultValue="1360"><Label>Steam heater, below (W):</Label></Field>
+            <Field id="brewMinW" type="textfield" defaultValue="1360"><Label>Brew heater, from (W):</Label></Field>
+            <Field id="brewMaxW" type="textfield" defaultValue="1480"><Label>Brew heater, below (W):</Label></Field>
+            <Field id="pumpHeaterMinW" type="textfield" defaultValue="1480"><Label>Pump + heater, from (W):</Label></Field>
+            <Field id="heaterMinW" type="textfield" defaultValue="1000"><Label>Any heater on, from (W):</Label></Field>
+            <Field id="ecoTimeoutMin" type="textfield" defaultValue="30"><Label>Machine's eco timer (min):</Label></Field>
+            <Field id="heatSilenceMin" type="textfield" defaultValue="2"><Label>Empty if silent while heating (min):</Label></Field>
+            <Field id="idleSilenceMin" type="textfield" defaultValue="8"><Label>Empty if silent when ready (min):</Label></Field>
+            <Field id="noDrawMin" type="textfield" defaultValue="3"><Label>No draw after switch-on (min):</Label></Field>
+            <Field id="tankLowPct" type="textfield" defaultValue="85"><Label>Warn at % of a learned tank:</Label></Field>
+            <Field id="sep3" type="separator"/>
+            <Field id="debugRaw" type="checkbox" defaultValue="false">
+                <Label>Log raw readings:</Label>
+                <Description>For calibrating a new machine</Description>
+            </Field>
+        </ConfigUI>
+        <States>
+            <State id="status"><ValueType>String</ValueType><TriggerLabel>Status</TriggerLabel><ControlPageLabel>Status</ControlPageLabel></State>
+            <State id="statusText"><ValueType>String</ValueType><TriggerLabel>Status text</TriggerLabel><ControlPageLabel>Status text</ControlPageLabel></State>
+            <State id="lastHeatUpSeconds"><ValueType>Integer</ValueType><TriggerLabel>Last heat-up (s)</TriggerLabel><ControlPageLabel>Last heat-up (s)</ControlPageLabel></State>
+            <State id="readySince"><ValueType>String</ValueType><TriggerLabel>Ready since</TriggerLabel><ControlPageLabel>Ready since</ControlPageLabel></State>
+            <State id="shotsToday"><ValueType>Integer</ValueType><TriggerLabel>Shots today</TriggerLabel><ControlPageLabel>Shots today</ControlPageLabel></State>
+            <State id="shotsTotal"><ValueType>Integer</ValueType><TriggerLabel>Shots total</TriggerLabel><ControlPageLabel>Shots total</ControlPageLabel></State>
+            <State id="lastShotSeconds"><ValueType>Integer</ValueType><TriggerLabel>Last shot (s)</TriggerLabel><ControlPageLabel>Last shot (s)</ControlPageLabel></State>
+            <State id="lastShotTime"><ValueType>String</ValueType><TriggerLabel>Last shot time</TriggerLabel><ControlPageLabel>Last shot time</ControlPageLabel></State>
+            <State id="steamsToday"><ValueType>Integer</ValueType><TriggerLabel>Steams today</TriggerLabel><ControlPageLabel>Steams today</ControlPageLabel></State>
+            <State id="lastBackflush"><ValueType>String</ValueType><TriggerLabel>Last backflush</TriggerLabel><ControlPageLabel>Last backflush</ControlPageLabel></State>
+            <State id="daysSinceBackflush"><ValueType>Integer</ValueType><TriggerLabel>Days since backflush</TriggerLabel><ControlPageLabel>Days since backflush</ControlPageLabel></State>
+            <State id="pumpSecondsSinceRefill"><ValueType>Integer</ValueType><TriggerLabel>Pump seconds since refill</TriggerLabel><ControlPageLabel>Pump seconds since refill</ControlPageLabel></State>
+            <State id="tankPercentUsed"><ValueType>Integer</ValueType><TriggerLabel>Tank % used</TriggerLabel><ControlPageLabel>Tank % used</ControlPageLabel></State>
+            <State id="tankLearnedPumpSeconds"><ValueType>Integer</ValueType><TriggerLabel>Learned tank (pump s)</TriggerLabel><ControlPageLabel>Learned tank (pump s)</ControlPageLabel></State>
+            <State id="detectorState"><ValueType>String</ValueType><TriggerLabel>Detector state (internal)</TriggerLabel><ControlPageLabel>Detector state</ControlPageLabel></State>
+        </States>
+        <UiDisplayStateId>statusText</UiDisplayStateId>
+    </Device>
+</Devices>

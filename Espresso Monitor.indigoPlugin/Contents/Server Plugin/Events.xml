@@ -1,0 +1,75 @@
+<?xml version="1.0"?>
+<Events>
+    <Event id="machineReady">
+        <Name>Machine ready</Name>
+        <ConfigUI>
+            <Field id="machineId" type="menu" defaultValue="any">
+                <Label>Machine:</Label>
+                <List class="self" method="machineMenu"/>
+            </Field>
+        </ConfigUI>
+    </Event>
+    <Event id="shotFinished">
+        <Name>Shot finished</Name>
+        <ConfigUI>
+            <Field id="machineId" type="menu" defaultValue="any">
+                <Label>Machine:</Label>
+                <List class="self" method="machineMenu"/>
+            </Field>
+        </ConfigUI>
+    </Event>
+    <Event id="steamFinished">
+        <Name>Steaming finished</Name>
+        <ConfigUI>
+            <Field id="machineId" type="menu" defaultValue="any">
+                <Label>Machine:</Label>
+                <List class="self" method="machineMenu"/>
+            </Field>
+        </ConfigUI>
+    </Event>
+    <Event id="backflushFinished">
+        <Name>Backflush finished</Name>
+        <ConfigUI>
+            <Field id="machineId" type="menu" defaultValue="any">
+                <Label>Machine:</Label>
+                <List class="self" method="machineMenu"/>
+            </Field>
+        </ConfigUI>
+    </Event>
+    <Event id="ecoEntered">
+        <Name>Entered eco</Name>
+        <ConfigUI>
+            <Field id="machineId" type="menu" defaultValue="any">
+                <Label>Machine:</Label>
+                <List class="self" method="machineMenu"/>
+            </Field>
+        </ConfigUI>
+    </Event>
+    <Event id="tankEmpty">
+        <Name>Tank empty</Name>
+        <ConfigUI>
+            <Field id="machineId" type="menu" defaultValue="any">
+                <Label>Machine:</Label>
+                <List class="self" method="machineMenu"/>
+            </Field>
+        </ConfigUI>
+    </Event>
+    <Event id="tankLow">
+        <Name>Tank low</Name>
+        <ConfigUI>
+            <Field id="machineId" type="menu" defaultValue="any">
+                <Label>Machine:</Label>
+                <List class="self" method="machineMenu"/>
+            </Field>
+        </ConfigUI>
+    </Event>
+    <Event id="tankRefilled">
+        <Name>Tank refilled</Name>
+        <ConfigUI>
+            <Field id="machineId" type="menu" defaultValue="any">
+                <Label>Machine:</Label>
+                <List class="self" method="machineMenu"/>
+            </Field>
+        </ConfigUI>
+    </Event>
+</Events>

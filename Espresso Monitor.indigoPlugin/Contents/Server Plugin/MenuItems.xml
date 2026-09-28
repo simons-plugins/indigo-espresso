@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<MenuItems>
+    <MenuItem id="markTankRefilledMenu">
+        <Name>Mark tank refilled...</Name>
+        <ButtonTitle>Refilled</ButtonTitle>
+        <CallbackMethod>markTankRefilledMenu</CallbackMethod>
+        <ConfigUI>
+            <Field id="machineId" type="menu">
+                <Label>Machine:</Label>
+                <List class="indigo.devices" filter="self.espressoMachine"/>
+            </Field>
+        </ConfigUI>
+    </MenuItem>
+</MenuItems>

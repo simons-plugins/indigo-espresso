@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<Actions>
+    <Action id="markTankRefilled" deviceFilter="self.espressoMachine">
+        <Name>Mark tank refilled</Name>
+        <CallbackMethod>markTankRefilledAction</CallbackMethod>
+    </Action>
+    <Action id="resetCounters" deviceFilter="self.espressoMachine">
+        <Name>Reset shot and steam counters</Name>
+        <CallbackMethod>resetCountersAction</CallbackMethod>
+    </Action>
+</Actions>
