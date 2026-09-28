@@ -26,6 +26,8 @@ HOLD_CAP_S = 5             # sample-and-hold cap per reading
 OFF_SILENCE_S = 45 * 60    # without plug state: idle this long => off
 ECO_MARGIN_S = 3 * 60      # eco silence may start this long before the timeout
 ECO_SILENCE_S = 3 * 60
+MIN_TANKFUL_S = 60         # a learned tankful must be at least this many pump-seconds...
+MIN_TANKFUL_SHARE = 0.5    # ...and at least this share of the median so far (else: false empty)
 
 IDLE, PUMP, PUMPHEAT, STEAM, BREW, OTHER = "idle", "pump", "pumpHeat", "steam", "brew", "other"
 
@@ -80,6 +82,7 @@ class Detector:
         self.steam_acc = 0.0
         self.steam_confirmed = False
         self.steam_last = None
+        self.fill_exempt_until = None           # pump runs before this are boiler fill, not shots
 
     # ---- public -----------------------------------------------------------
     def classify(self, watts):
@@ -102,7 +105,12 @@ class Detector:
             events += self._plug_changed(t, plug_on)
         if self.last_t is not None:
             self._hold(self.last_watts, self.last_t, t)
+        if self.suspended and self.status == "heating":
+            # restored mid heat-up: restart the heat-up clock rather than trust the gap
+            self.heat_start = self.ready_candidate = t
         self.suspended = False
+        if self.last_watts > self.th["idleMaxW"] >= watts:
+            self.last_active_t = t              # the draw lasted until this report
         if watts > self.th["idleMaxW"]:
             events += self._on_draw(t, watts)
         self._track_heater(t, watts)
@@ -177,6 +185,7 @@ class Detector:
         self.plug_on = on
         if on:
             self._start_heating(t, user=True)
+            self.fill_exempt_until = t + STARTUP_FILL_S
         else:
             events += self._resolve_pending(force_shots=True)
             self.status = "off"
@@ -195,6 +204,7 @@ class Detector:
         self.last_active_t = t
         if self.status == "off" and self.plug_on is None:
             self._start_heating(t, user=True)
+            self.fill_exempt_until = t + STARTUP_FILL_S
             self.last_active_t = t
         if self.status in ("tankEmpty", "noDraw") and watts >= self.th["pumpMinW"]:
             events.append({"type": "tankRefilled", "t": t, "manual": False})
@@ -266,12 +276,7 @@ class Detector:
             return events
         if ep["heat"] == 0 and ep["n"] < MIN_PUMP_ONLY_READINGS:
             return events
-        switched_on_just_now = (
-            self.heat_start is not None
-            and ep["start"] - self.heat_start < STARTUP_FILL_S
-            and self.last_user_activity == self.heat_start
-        )
-        if switched_on_just_now:
+        if self.fill_exempt_until is not None and ep["start"] < self.fill_exempt_until:
             return events
         end = ep["last"] + SAMPLE_S
         self.pending.append({"start": ep["start"], "end": end, "seconds": seconds})
@@ -309,8 +314,13 @@ class Detector:
 
     def _tank_empty(self, t, reason):
         self.status = "noDraw" if reason == "noDraw" else "tankEmpty"
-        if reason != "noDraw" and self.pump_seconds > 0:
-            self.tank_history = (self.tank_history + [self.pump_seconds])[-3:]
+        if reason != "noDraw":
+            floor = max(MIN_TANKFUL_S, MIN_TANKFUL_SHARE * statistics.median(self.tank_history)) \
+                if self.tank_history else MIN_TANKFUL_S
+            if self.pump_seconds >= floor:
+                self.tank_history = (self.tank_history + [self.pump_seconds])[-3:]
+            self.pump_seconds = 0.0
+            self.tank_low_fired = False
         return [{"type": "tankEmpty", "t": t, "reason": reason}]
 
     def _advance_status(self, t):

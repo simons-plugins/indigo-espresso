@@ -107,3 +107,16 @@ def test_stop_comm_persists_snapshot():
     p.detectors[dev.id].shots_total = 5
     p.deviceStopComm(dev)
     assert json.loads(dev.states["detectorState"])["shotsTotal"] == 5
+
+
+def test_updates_that_do_not_change_power_or_plug_are_ignored():
+    p = make_plugin()
+    plug = power(watts=233.0, on=True)
+    dev = machine(p)
+    det = p.detectors[dev.id]
+    p.deviceUpdated(power(watts=1.5, on=True), plug)          # real change: 1.5 -> 233
+    before = det.ep["n"] if det.ep else 0
+    same = FakeDevice(100, "Plug", pluginId="other",
+                      states={"curEnergyLevel": 233.0, "onOffState": True, "accumEnergyTotal": 9.9})
+    p.deviceUpdated(plug, same)                               # only another state changed
+    assert (det.ep["n"] if det.ep else 0) == before

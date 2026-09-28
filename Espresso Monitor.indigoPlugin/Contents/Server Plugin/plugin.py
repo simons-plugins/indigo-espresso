@@ -59,8 +59,12 @@ class Plugin(indigo.PluginBase):
         super().deviceUpdated(origDev, newDev)
         if newDev.pluginId == self.pluginId:
             return
-        if newDev.id in self.power_map:
-            self.process_reading(newDev, time.time())
+        if newDev.id not in self.power_map:
+            return
+        # updates to other states (energy totals, comms time) re-send the same watts
+        if all(origDev.states.get(k) == newDev.states.get(k) for k in ("curEnergyLevel", "onOffState")):
+            return
+        self.process_reading(newDev, time.time())
 
     def runConcurrentThread(self):
         try:

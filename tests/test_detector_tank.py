@@ -85,10 +85,10 @@ def test_waking_from_eco_heats_then_ready():
 def test_auto_empty_records_tankful_and_refill_resets():
     det = Detector(BIANCA)
     warm_on(det)
-    feed(det, pump(400, 30))
-    ticks(det, 431, 10 * 60)
+    feed(det, pump(400, 60))
+    ticks(det, 461, 10 * 60)
     assert det.status == "tankEmpty"
-    assert len(det.tank_history) == 1 and det.tank_history[0] >= 30
+    assert len(det.tank_history) == 1 and det.tank_history[0] >= 60
     ev = feed(det, [(1100, 230, True), (1103, 1400, True)])
     assert "tankRefilled" in types(ev)
     assert det.pump_seconds == 0 and det.status == "heating"
@@ -184,4 +184,67 @@ def test_eco_timer_counts_from_actual_steaming_not_the_steam_window():
     ev += ticks(det, 1090 + 29 * 60 + 5, 15 * 60)
     assert "shotFinished" in types(ev) and "steamFinished" in types(ev)
     assert "ecoEntered" in types(ev)
+    assert "tankEmpty" not in types(ev)
+
+
+# ---- final-review findings -------------------------------------------------
+
+def empty_after_shot(det):
+    warm_on(det)
+    feed(det, pump(400, 60))
+    ticks(det, 461, 10 * 60)
+    assert det.status == "tankEmpty"
+
+
+def test_refill_with_plug_off_starts_the_new_tank_at_zero():
+    det = Detector(BIANCA)
+    det.tank_history = [100.0]
+    empty_after_shot(det)             # a 60 pump-second tank, plausible against 100
+    feed(det, [(1200, 1.5, False), (1500, 1.5, True), (1503, 1400, True)])
+    assert det.pump_seconds == 0
+    assert det.tank_history == [100.0, 60.0]
+
+
+def test_implausibly_small_tankful_is_not_learned():
+    # e.g. the machine switched off at its own switch soon after a shot: silence looks like empty
+    det = Detector(BIANCA)
+    det.tank_history = [300.0]
+    empty_after_shot(det)             # "tank" of ~63 pump-seconds, well under half the median
+    assert det.tank_history == [300.0]
+
+
+def test_first_tankful_needs_a_minimum_to_be_learned():
+    det = Detector(BIANCA)
+    warm_on(det)
+    feed(det, pump(400, 30))
+    ticks(det, 431, 10 * 60)
+    assert det.status == "tankEmpty" and det.tank_history == []
+
+
+def test_restore_while_heating_then_idle_reading_is_not_no_draw():
+    det = Detector(BIANCA)
+    feed(det, [(0, 1.7, True), (3, 1400, True)])
+    again = Detector(BIANCA, saved=det.snapshot())
+    ev = again.reading(T0 + 1000, 1.5, True)
+    ev += ticks(again, 1001, 120)
+    assert "tankEmpty" not in types(ev)
+
+
+def test_shot_pulled_from_eco_is_counted():
+    det = Detector(BIANCA)
+    warm_on(det)
+    det.status = "eco"
+    s = [(5000, 233, True)] + [(5000 + k, 1565, True) for k in range(3, 27, 3)] + \
+        [(5027, 238, True), (5030, 1.6, True)]
+    for k in range(5070, 5500, 40):
+        s += [(k, 1390, True), (k + 3, 1.5, True)]
+    ev = feed(det, s)
+    assert types(ev).count("shotFinished") == 1
+
+
+def test_drop_to_idle_after_long_unreported_draw_is_not_instant_silence():
+    # a meter reporting on a deadband holds 1400 W for minutes without a report
+    det = Detector(BIANCA)
+    ev = feed(det, [(0, 1.5, True), (3, 1400, True), (200, 1.5, True)])
+    ev += ticks(det, 201, 60)
     assert "tankEmpty" not in types(ev)
