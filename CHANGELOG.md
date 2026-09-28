@@ -1,7 +1,7 @@
 # Changelog
 
 ## 2026.0.4
-- Tests: three more logged shots Beanconqueror never uploaded (19, 22, 23 Sep) added to the reference list; 20 of 21 found, 3 unlogged detections left.
+- Tests: six more logged shots added to the reference list (19, 22, 23 and 26 Sep); 23 of 24 found, no false detections.
 
 ## 2026.0.3
 - Tests: replay fixtures re-exported with correct local times (the first export was an hour late).
