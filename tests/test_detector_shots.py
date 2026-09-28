@@ -141,3 +141,24 @@ def test_pump_alone_shot_counts_without_pump_heater_readings():
     s = [(1000 + k, 233, True) for k in range(0, 27, 3)] + [(1027, 1.5, True)]
     ev = feed(det, s + idle_until(1060, 1500))
     assert types(ev).count("shotFinished") == 1
+
+
+def test_espresso_without_milk_is_recorded_within_about_two_minutes_of_the_shot():
+    det = ready_machine()
+    feed(det, shot(1000))                       # shot ends ~1030
+    ev = []
+    for k in range(1040, 1180, 10):             # 2 min 30 s of quiet, ticking like the plugin
+        ev += det.tick(T0 + k)
+    assert types(ev).count("shotFinished") == 1
+
+
+def test_backflush_is_not_split_by_a_long_run_still_in_progress():
+    # 26 Sep: a 30 s run, then 100 s later a 63 s run - the 2-minute window from the
+    # first run elapses while the second is still pumping
+    det = ready_machine()
+    s = shot(1000, seconds=30) + idle_until(1040, 1130)
+    s += shot(1130, seconds=63) + idle_until(1200, 1210)
+    s += shot(1210, seconds=30) + idle_until(1250, 1700)
+    ev = feed(det, s)
+    assert types(ev).count("backflushFinished") == 1
+    assert "shotFinished" not in types(ev)
