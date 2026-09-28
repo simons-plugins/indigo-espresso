@@ -1,0 +1,22 @@
+# Shots Simon logged in Beanconqueror, 14-27 Sep 2026. logged_epoch is when the shot was saved
+# (Visualizer 'start_time'): at or up to ~4 min after the shot. Two shots never reached Visualizer;
+# Simon confirmed them in Beanconqueror, times approximate. Simon logs every shot.
+logged_epoch,duration_s,source
+1789454837,27.5,visualizer
+1789541027,29.5,visualizer
+1789572082,35.2,visualizer
+1789625747,32.4,visualizer
+1789805187,31.4,visualizer
+1789817080,35.0,visualizer
+1789892082,35.4,visualizer
+1789909388,37.2,visualizer
+1789970448,36.4,visualizer
+1790058739,36.1,visualizer
+1790145544,28.7,visualizer
+1790174368,27.5,visualizer
+1790230747,35.5,visualizer
+1790317920,,beanconqueror-not-uploaded
+1790407916,33.2,visualizer
+1790432808,22.7,visualizer
+1790432951,32.1,visualizer
+1790493900,,beanconqueror-not-uploaded
