@@ -53,7 +53,7 @@ readings every ~3 s, only when the value changes), confirmed with Simon:
 - Shot: pump starts (~230 W), pump + heater, pump alone; 25–40 s in all.
 - Steaming usually starts ~10 s after the shot: steam heater 30–60 s.
 - Steam-boiler refill: a few seconds of pump alone, then ~50 s steam heater.
-- Backflush (26 Sep 16:23–16:34): repeated 10–15 s pump runs a few seconds
+- Backflush (26 Sep 15:30–15:33; times corrected 2026-09-28, the original export was an hour late): repeated 10–15 s pump runs a few seconds
   apart, no steaming.
 - Eco: 30 min after the last activity the heaters stop for ~20–25 min while
   the machine cools to its eco temperature, then keep-warm resumes at a lower
