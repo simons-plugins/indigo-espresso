@@ -120,3 +120,18 @@ def test_updates_that_do_not_change_power_or_plug_are_ignored():
                       states={"curEnergyLevel": 233.0, "onOffState": True, "accumEnergyTotal": 9.9})
     p.deviceUpdated(plug, same)                               # only another state changed
     assert (det.ep["n"] if det.ep else 0) == before
+
+
+def test_start_backflush_action_starts_a_session():
+    p = make_plugin()
+    dev = machine(p)
+    p.startBackflushAction(type("A", (), {"deviceId": dev.id})(), dev)
+    assert json.loads(dev.states["detectorState"])["backflush"]["runs"] == 0
+
+
+def test_start_backflush_menu_needs_a_machine():
+    p = make_plugin()
+    dev = machine(p)
+    assert p.startBackflushMenu({"machineId": ""}, "startBackflushMenu")[0] is False
+    assert p.startBackflushMenu({"machineId": str(dev.id)}, "startBackflushMenu") is True
+    assert json.loads(dev.states["detectorState"])["backflush"] is not None

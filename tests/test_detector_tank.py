@@ -250,9 +250,9 @@ def test_drop_to_idle_after_long_unreported_draw_is_not_instant_silence():
     assert "tankEmpty" not in types(ev)
 
 
-def test_undecided_pump_runs_survive_a_restart():
-    # 29 Sep: saving the device's settings restarted it mid-backflush and the undecided
-    # runs were lost - no shot, no backflush recorded
+def test_steaming_after_a_shot_survives_a_restart():
+    # Saving the device's settings restarts it; a restart between the shot and the
+    # steaming must not lose the steam.
     det = Detector(BIANCA)
     warm_on(det)
     s = []
@@ -261,10 +261,10 @@ def test_undecided_pump_runs_survive_a_restart():
     s += [(1000, 233, True)] + [(1000 + k, 1565, True) for k in range(3, 27, 3)] + \
          [(1027, 238, True), (1030, 1.6, True)]
     feed(det, s)
-    det.tick(T0 + 1045)                 # run closed, not yet decided
-    assert det.pending
+    det.tick(T0 + 1045)
+    assert det.shots_today == 1 and det.steam_window_end
     again = Detector(BIANCA, saved=det.snapshot())
-    ev = []
-    for k in range(1050, 1300, 10):
+    ev = feed(again, [(1050 + k, 1265, True) for k in range(0, 45, 3)] + [(1100, 1.6, True)])
+    for k in range(1110, 1300, 10):
         ev += again.tick(T0 + k)
-    assert types(ev).count("shotFinished") == 1
+    assert types(ev).count("steamFinished") == 1

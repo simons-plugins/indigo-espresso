@@ -158,6 +158,25 @@ class Plugin(indigo.PluginBase):
                 self.logger.exception(f"could not execute trigger {trigger.id}")
 
     # ---- actions and menus -----------------------------------------------
+    def startBackflushAction(self, action, dev):
+        self._start_backflush(dev)
+
+    def startBackflushMenu(self, valuesDict, typeId):
+        try:
+            dev = indigo.devices[int(valuesDict.get("machineId"))]
+        except (TypeError, ValueError, KeyError):
+            return False, valuesDict, {"machineId": "Choose a machine"}
+        self._start_backflush(dev)
+        return True
+
+    def _start_backflush(self, dev):
+        det = self.detectors.get(dev.id)
+        if det is None:
+            return
+        now = time.time()
+        self.logger.info(f"{dev.name}: backflush started - pump runs now count as backflush, not shots")
+        self._apply(dev, det.start_backflush(now), now)
+
     def markTankRefilledAction(self, action, dev):
         self._mark_refilled(dev)
 
