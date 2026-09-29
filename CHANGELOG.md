@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026.0.5
+- Fix: undecided pump runs (and the steam window after a shot) now survive a device or plugin restart. Saving a device's settings restarts it; on 29 Sep that lost a whole backflush.
+- Bianca preset: pump + heater cut-off lowered from 1,480 to 1,470 W. A 29 Sep shot read only 1,476 W and was missed. Existing devices keep their values: press **Load preset values** to pick this up.
+
 ## 2026.0.4
 - Tests: six more logged shots added to the reference list (19, 22, 23 and 26 Sep); 23 of 24 found, no false detections.
 

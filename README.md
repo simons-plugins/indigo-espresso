@@ -55,7 +55,7 @@ Steaming finished, Backflush finished, Entered eco, Tank empty, Tank low, Tank r
 | Pump alone (rotary) | ~200–290 |
 | Steam heater | ~1,245–1,330 |
 | Brew heater | ~1,390–1,450 |
-| Pump + brew heater | ~1,500–1,690 |
+| Pump + brew heater | ~1,480–1,690 (drifts; one shot read 1,476) |
 
 Heat-up from cold: ~14.5 min with both boilers, ~6–8 min with the steam boiler off.
 

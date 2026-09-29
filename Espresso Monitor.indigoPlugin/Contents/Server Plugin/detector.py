@@ -78,11 +78,13 @@ class Detector:
         self.run_start = None                   # current heater run (>= heaterMinW)
         self.ready_candidate = self.heat_start if self.status == "heating" else None
         self.ep = None                          # current pump episode {start, last, n}
-        self.pending = []                       # closed pump runs awaiting classification
-        self.steam_window_end = None
-        self.steam_acc = 0.0
-        self.steam_confirmed = False
-        self.steam_last = None
+        # Undecided pump runs and the steam window after them are saved too: a device
+        # restart (saving its settings does one) must not lose a shot or a backflush.
+        self.pending = [dict(r) for r in s.get("pending", [])]
+        self.steam_window_end = s.get("steamWindowEnd")
+        self.steam_acc = float(s.get("steamAcc", 0.0))
+        self.steam_confirmed = bool(s.get("steamConfirmed", False))
+        self.steam_last = s.get("steamLast")
         self.fill_exempt_until = None           # pump runs before this are boiler fill, not shots
 
     # ---- public -----------------------------------------------------------
@@ -166,6 +168,8 @@ class Detector:
             "lastHeatUpSeconds": self.last_heat_up_seconds, "readySince": self.ready_since,
             "lastBackflush": self.last_backflush, "pumpSeconds": self.pump_seconds,
             "tankHistory": self.tank_history, "tankLowFired": self.tank_low_fired,
+            "pending": self.pending, "steamWindowEnd": self.steam_window_end, "steamAcc": self.steam_acc,
+            "steamConfirmed": self.steam_confirmed, "steamLast": self.steam_last,
         }
 
     # ---- internals --------------------------------------------------------

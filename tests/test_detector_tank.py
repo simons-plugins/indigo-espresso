@@ -248,3 +248,23 @@ def test_drop_to_idle_after_long_unreported_draw_is_not_instant_silence():
     ev = feed(det, [(0, 1.5, True), (3, 1400, True), (200, 1.5, True)])
     ev += ticks(det, 201, 60)
     assert "tankEmpty" not in types(ev)
+
+
+def test_undecided_pump_runs_survive_a_restart():
+    # 29 Sep: saving the device's settings restarted it mid-backflush and the undecided
+    # runs were lost - no shot, no backflush recorded
+    det = Detector(BIANCA)
+    warm_on(det)
+    s = []
+    for k in range(200, 990, 40):
+        s += [(k, 1390, True), (k + 3, 1.5, True)]
+    s += [(1000, 233, True)] + [(1000 + k, 1565, True) for k in range(3, 27, 3)] + \
+         [(1027, 238, True), (1030, 1.6, True)]
+    feed(det, s)
+    det.tick(T0 + 1045)                 # run closed, not yet decided
+    assert det.pending
+    again = Detector(BIANCA, saved=det.snapshot())
+    ev = []
+    for k in range(1050, 1300, 10):
+        ev += again.tick(T0 + k)
+    assert types(ev).count("shotFinished") == 1
