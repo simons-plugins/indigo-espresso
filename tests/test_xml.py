@@ -11,7 +11,7 @@ def test_info_plist():
         info = plistlib.load(f)
     assert info["CFBundleDisplayName"] == "Espresso Monitor"
     assert info["CFBundleIdentifier"] == "com.simons-plugins.indigo-espresso"
-    assert info["PluginVersion"] == "2026.0.4"
+    assert info["PluginVersion"] == "2026.0.5"
 
 import profiles  # noqa: E402
 

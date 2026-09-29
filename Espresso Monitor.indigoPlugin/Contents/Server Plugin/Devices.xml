@@ -30,8 +30,8 @@
             <Field id="steamMinW" type="textfield" defaultValue="1150"><Label>Steam heater, from (W):</Label></Field>
             <Field id="steamMaxW" type="textfield" defaultValue="1360"><Label>Steam heater, below (W):</Label></Field>
             <Field id="brewMinW" type="textfield" defaultValue="1360"><Label>Brew heater, from (W):</Label></Field>
-            <Field id="brewMaxW" type="textfield" defaultValue="1480"><Label>Brew heater, below (W):</Label></Field>
-            <Field id="pumpHeaterMinW" type="textfield" defaultValue="1480"><Label>Pump + heater, from (W):</Label></Field>
+            <Field id="brewMaxW" type="textfield" defaultValue="1470"><Label>Brew heater, below (W):</Label></Field>
+            <Field id="pumpHeaterMinW" type="textfield" defaultValue="1470"><Label>Pump + heater, from (W):</Label></Field>
             <Field id="heaterMinW" type="textfield" defaultValue="1000"><Label>Any heater on, from (W):</Label></Field>
             <Field id="ecoTimeoutMin" type="textfield" defaultValue="30"><Label>Machine's eco timer (min):</Label></Field>
             <Field id="heatSilenceMin" type="textfield" defaultValue="2"><Label>Empty if silent while heating (min):</Label></Field>

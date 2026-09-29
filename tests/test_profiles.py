@@ -7,8 +7,8 @@ def test_bianca_preset_matches_measured_values():
     th = profiles.preset_thresholds("biancaV3")
     assert th["pumpMinW"] == 150 and th["pumpMaxW"] == 350
     assert th["steamMinW"] == 1150 and th["steamMaxW"] == 1360
-    assert th["brewMinW"] == 1360 and th["brewMaxW"] == 1480
-    assert th["pumpHeaterMinW"] == 1480
+    assert th["brewMinW"] == 1360 and th["brewMaxW"] == 1470
+    assert th["pumpHeaterMinW"] == 1470
     assert th["ecoTimeoutMin"] == 30 and th["idleSilenceMin"] == 8
     assert set(th) == set(profiles.THRESHOLD_KEYS)
 

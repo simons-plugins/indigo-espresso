@@ -11,10 +11,13 @@ PRESETS = {
         "label": "Lelit Bianca V3 (measured)",
         "verified": True,
         # Measured 2026-09 on an IKEA GRILLPLATS plug: pump ~230 W, steam heater
-        # ~1.25-1.33 kW, brew heater ~1.39-1.45 kW, pump + brew heater ~1.5-1.69 kW.
+        # ~1.25-1.33 kW, brew heater ~1.37-1.46 kW, pump + brew heater ~1.48-1.69 kW.
+        # The levels drift with mains voltage and element temperature: on 29 Sep a shot's
+        # pump + heater read only 1,476 W. 1,470 is the lowest cut-off with no false shots
+        # over 14-27 Sep (1,460 gave one); see issue #2 for learning the levels instead.
         "thresholds": {
             "idleMaxW": 20, "pumpMinW": 150, "pumpMaxW": 350, "steamMinW": 1150, "steamMaxW": 1360,
-            "brewMinW": 1360, "brewMaxW": 1480, "pumpHeaterMinW": 1480, "heaterMinW": 1000,
+            "brewMinW": 1360, "brewMaxW": 1470, "pumpHeaterMinW": 1470, "heaterMinW": 1000,
             "ecoTimeoutMin": 30, "heatSilenceMin": 2, "idleSilenceMin": 8, "noDrawMin": 3, "tankLowPct": 85,
         },
     },

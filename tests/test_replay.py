@@ -89,3 +89,15 @@ def test_two_weeks_no_false_alarms():
     assert all(n <= 5 for n in per_day.values()), per_day
     assert sum(per_day.values()) >= 12, per_day      # at least most mornings found
     assert len(replay.of(ev, "backflushFinished")) == 1
+
+
+def test_shot_with_low_pump_heater_readings_sep29():
+    # 29 Sep 07:25: pump + heater read only 1,476-1,514 W (other days 1,550-1,690 W);
+    # logged in Visualizer at 07:27:54, 28.7 s
+    d = Detector(BIANCA, tz=LONDON)
+    ev = replay.run(d, replay.load("sep29-morning.csv"))
+    shots = [s for s in replay.of(ev, "shotFinished")
+             if dt.datetime(2026, 9, 29, 7, 24, tzinfo=LONDON).timestamp() <= s["start"]
+             <= dt.datetime(2026, 9, 29, 7, 26, tzinfo=LONDON).timestamp()]
+    assert len(shots) == 1
+    assert len(replay.of(ev, "steamFinished")) >= 1
