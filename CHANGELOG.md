@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.0.6
+- New **Start backflush** action and menu item: pump runs until 2 min after the last one count as one backflush, not shots.
+- Removed the automatic backflush rule. It relied on how many pump runs the plug happened to show, which is chance (#3). Without the button, backflush cycles count as shots.
+- Shots are recorded as soon as the pump stops (the confirmation wait existed only for the automatic rule).
+- Against Simon's logged shots, 14-27 Sep: 24 of 24 found; the only false detections are the 26 Sep backflush runs, made before the button existed.
+
 ## 2026.0.5
 - Fix: undecided pump runs (and the steam window after a shot) now survive a device or plugin restart. Saving a device's settings restarts it; on 29 Sep that lost a whole backflush.
 - Bianca preset: pump + heater cut-off lowered from 1,480 to 1,470 W. A 29 Sep shot read only 1,476 W and was missed. Existing devices keep their values: press **Load preset values** to pick this up.

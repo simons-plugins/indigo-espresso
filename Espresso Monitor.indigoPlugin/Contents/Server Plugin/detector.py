@@ -18,9 +18,8 @@ MIN_PUMP_ONLY_READINGS = 6 # ...and includes a pump + heater reading, or this ma
 STARTUP_FILL_S = 90        # pump runs this soon after switch-on fill the steam boiler
 STEAM_WINDOW_S = 180       # steaming counts if it happens within this after a shot
 STEAM_MIN_S = 20
-BACKFLUSH_WINDOW_S = 120   # pump runs this close together may be one backflush; an espresso
-                           # with no milk is confirmed this long after the shot
-BACKFLUSH_MIN_RUNS = 3
+BACKFLUSH_END_S = 120      # a backflush session ends this long after its last pump run...
+BACKFLUSH_CANCEL_S = 600   # ...or is dropped this long after "Start backflush" if nothing pumped
 BURST_MAX_S = 15           # heater runs up to this long are keep-warm bursts
 READY_SETTLE_S = 90        # this long with only keep-warm bursts => ready
 HOLD_CAP_S = 5             # sample-and-hold cap per reading
@@ -78,9 +77,9 @@ class Detector:
         self.run_start = None                   # current heater run (>= heaterMinW)
         self.ready_candidate = self.heat_start if self.status == "heating" else None
         self.ep = None                          # current pump episode {start, last, n}
-        # Undecided pump runs and the steam window after them are saved too: a device
-        # restart (saving its settings does one) must not lose a shot or a backflush.
-        self.pending = [dict(r) for r in s.get("pending", [])]
+        # The backflush session and the steam window are saved too: a device restart
+        # (saving its settings does one) must not lose a backflush or a steam.
+        self.backflush = dict(s["backflush"]) if s.get("backflush") else None   # {start, lastRun, runs}
         self.steam_window_end = s.get("steamWindowEnd")
         self.steam_acc = float(s.get("steamAcc", 0.0))
         self.steam_confirmed = bool(s.get("steamConfirmed", False))
@@ -138,6 +137,12 @@ class Detector:
             self._start_heating(t, user=True)
         return [{"type": "tankRefilled", "t": t, "manual": True}]
 
+    def start_backflush(self, t):
+        """The user says they are about to backflush: every pump run until the session
+        ends counts as backflush, not shots. Power alone can't tell the two apart."""
+        self.backflush = {"start": t, "lastRun": None, "runs": 0}
+        return []
+
     def reset_counters(self):
         self.shots_today = self.shots_total = self.steams_today = 0
 
@@ -153,7 +158,7 @@ class Detector:
         if self.status in ("ready", "heating", "eco"):
             if self.ep and self.ep["n"] >= 2 and t - self.ep["last"] <= PUMP_GAP_S:
                 return "brewing"
-            if len(self.pending) >= 2:
+            if self.backflush:
                 return "backflushing"
             if self.steam_window_end and t <= self.steam_window_end and self.classify(self.last_watts) == STEAM:
                 return "steaming"
@@ -168,7 +173,7 @@ class Detector:
             "lastHeatUpSeconds": self.last_heat_up_seconds, "readySince": self.ready_since,
             "lastBackflush": self.last_backflush, "pumpSeconds": self.pump_seconds,
             "tankHistory": self.tank_history, "tankLowFired": self.tank_low_fired,
-            "pending": self.pending, "steamWindowEnd": self.steam_window_end, "steamAcc": self.steam_acc,
+            "backflush": self.backflush, "steamWindowEnd": self.steam_window_end, "steamAcc": self.steam_acc,
             "steamConfirmed": self.steam_confirmed, "steamLast": self.steam_last,
         }
 
@@ -192,7 +197,7 @@ class Detector:
             self._start_heating(t, user=True)
             self.fill_exempt_until = t + STARTUP_FILL_S
         else:
-            events += self._resolve_pending(force_shots=True)
+            events += self._finish_backflush()
             self.status = "off"
             self.ep = None
             self.run_start = None
@@ -248,8 +253,12 @@ class Detector:
         if self.ep and t - self.ep["last"] > PUMP_GAP_S:
             events += self._close_episode()
         events += self._advance_steam(t)
-        if self.pending and self.ep is None and t - self.pending[-1]["end"] >= BACKFLUSH_WINDOW_S:
-            events += self._resolve_pending(force_shots=False)
+        bf = self.backflush
+        if bf and self.ep is None:
+            if bf["runs"] and t - bf["lastRun"] >= BACKFLUSH_END_S:
+                events += self._finish_backflush()
+            elif not bf["runs"] and t - bf["start"] >= BACKFLUSH_CANCEL_S:
+                self.backflush = None
         events += self._advance_status(t)
         return events
 
@@ -259,7 +268,6 @@ class Detector:
             return events
         if not self.steam_confirmed and self.steam_acc >= STEAM_MIN_S:
             self.steam_confirmed = True
-            events += self._resolve_pending(force_shots=True)
         if t > self.steam_window_end:
             if self.steam_confirmed:
                 self.steams_today += 1
@@ -277,6 +285,10 @@ class Detector:
         if ep["n"] >= 2:
             self.pump_seconds += seconds
             events += self._check_tank_low(ep["last"])
+            if self.backflush:
+                self.backflush["runs"] += 1
+                self.backflush["lastRun"] = ep["last"] + SAMPLE_S
+                return events
         if ep["n"] < MIN_RUN_READINGS or seconds < MIN_RUN_S:
             return events
         if ep["heat"] == 0 and ep["n"] < MIN_PUMP_ONLY_READINGS:
@@ -284,7 +296,7 @@ class Detector:
         if self.fill_exempt_until is not None and ep["start"] < self.fill_exempt_until:
             return events
         end = ep["last"] + SAMPLE_S
-        self.pending.append({"start": ep["start"], "end": end, "seconds": seconds})
+        events += self._record_shot(ep["start"], end, seconds)
         self.last_user_activity = end
         self.steam_window_end = end + STEAM_WINDOW_S
         self.steam_acc = 0.0
@@ -292,22 +304,20 @@ class Detector:
         self.steam_last = None
         return events
 
-    def _resolve_pending(self, force_shots):
-        runs, self.pending = self.pending, []
-        if not runs:
+    def _record_shot(self, start, end, seconds):
+        self.shots_today += 1
+        self.shots_total += 1
+        self.last_shot_seconds = round(seconds)
+        self.last_shot_time = start
+        return [{"type": "shotFinished", "t": end, "start": start, "seconds": round(seconds)}]
+
+    def _finish_backflush(self):
+        bf, self.backflush = self.backflush, None
+        if not bf or not bf["runs"]:
             return []
-        if not force_shots and len(runs) >= BACKFLUSH_MIN_RUNS:
-            self.last_backflush = runs[-1]["end"]
-            return [{"type": "backflushFinished", "t": runs[-1]["end"], "runs": len(runs)}]
-        events = []
-        for run in runs:
-            self.shots_today += 1
-            self.shots_total += 1
-            self.last_shot_seconds = round(run["seconds"])
-            self.last_shot_time = run["start"]
-            events.append({"type": "shotFinished", "t": run["end"], "start": run["start"],
-                           "seconds": round(run["seconds"])})
-        return events
+        self.last_backflush = bf["lastRun"]
+        self.last_user_activity = bf["lastRun"]
+        return [{"type": "backflushFinished", "t": bf["lastRun"], "runs": bf["runs"]}]
 
     def _check_tank_low(self, t):
         if not self.tank_history or self.tank_low_fired:

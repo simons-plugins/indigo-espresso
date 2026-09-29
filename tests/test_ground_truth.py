@@ -12,10 +12,10 @@ import replay
 from detector import Detector
 
 LONDON = ZoneInfo("Europe/London")
-# 26 Sep 15:29 was a real shot (a second shot soon after the 15:26 sink shot), about 2 min
-# before a backflush; the backflush rule wrongly absorbs it (issue #3).
-KNOWN_MISSED = {dt.datetime(2026, 9, 26, 15, 29, 11, tzinfo=LONDON).timestamp()}
-MAX_FALSE_DETECTIONS = 0   # 2026-09-28: every detection over 14-27 Sep was a real shot
+KNOWN_MISSED = set()
+# 2026-09-29 baseline: the 26 Sep backflush (15:30:52 and 15:32:13) counts as two shots,
+# because nobody pressed "Start backflush" then - there is no automatic backflush rule.
+MAX_FALSE_DETECTIONS = 2
 
 
 def _fmt(t):
@@ -29,4 +29,4 @@ def test_every_logged_shot_is_detected_and_false_detections_do_not_grow():
     pairs, missed, extra = groundtruth.match(starts, groundtruth.load_logged())
     assert set(missed) <= KNOWN_MISSED, "missed real shots: " + ", ".join(map(_fmt, missed))
     assert len(extra) <= MAX_FALSE_DETECTIONS, "false detections: " + ", ".join(map(_fmt, extra))
-    assert len(pairs) == 23
+    assert len(pairs) == 24

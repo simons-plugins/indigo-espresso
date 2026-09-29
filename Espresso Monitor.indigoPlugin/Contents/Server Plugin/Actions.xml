@@ -1,5 +1,9 @@
 <?xml version="1.0"?>
 <Actions>
+    <Action id="startBackflush" deviceFilter="self.espressoMachine">
+        <Name>Start backflush</Name>
+        <CallbackMethod>startBackflushAction</CallbackMethod>
+    </Action>
     <Action id="markTankRefilled" deviceFilter="self.espressoMachine">
         <Name>Mark tank refilled</Name>
         <CallbackMethod>markTankRefilledAction</CallbackMethod>

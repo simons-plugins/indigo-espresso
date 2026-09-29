@@ -68,34 +68,11 @@ def test_shot_then_steam_confirms_shot_quickly_and_counts_steam():
     assert det.shots_today == 1 and det.steams_today == 1
 
 
-def test_espresso_only_is_confirmed_after_backflush_window():
-    det = ready_machine()
-    ev = feed(det, shot(1000) + idle_until(1060, 1500))
-    shots = [e for e in ev if e["type"] == "shotFinished"]
-    assert len(shots) == 1
-    assert shots[0]["t"] - T0 < 1100
-    assert "steamFinished" not in types(ev)
-
-
 def test_two_shots_close_together_are_two_shots():
     det = ready_machine()
     ev = feed(det, shot(1000) + idle_until(1040, 1120) + shot(1120) + idle_until(1160, 1700))
     assert types(ev).count("shotFinished") == 2
     assert "backflushFinished" not in types(ev)
-
-
-def test_backflush_runs_count_as_one_backflush_and_no_shots():
-    det = ready_machine()
-    s = []
-    at = 1000
-    for _ in range(5):
-        s += shot(at, seconds=20) + idle_until(at + 25, at + 60)
-        at += 60
-    ev = feed(det, s + idle_until(at, at + 600))
-    assert types(ev).count("backflushFinished") == 1
-    assert "shotFinished" not in types(ev)
-    assert det.shots_today == 0
-    assert det.last_backflush is not None
 
 
 def test_single_pump_band_readings_are_not_shots():
@@ -143,22 +120,99 @@ def test_pump_alone_shot_counts_without_pump_heater_readings():
     assert types(ev).count("shotFinished") == 1
 
 
-def test_espresso_without_milk_is_recorded_within_about_two_minutes_of_the_shot():
+def test_espresso_is_recorded_as_soon_as_the_pump_stops():
     det = ready_machine()
-    feed(det, shot(1000))                       # shot ends ~1030
-    ev = []
-    for k in range(1040, 1180, 10):             # 2 min 30 s of quiet, ticking like the plugin
-        ev += det.tick(T0 + k)
-    assert types(ev).count("shotFinished") == 1
+    feed(det, shot(1000))                      # pump stops ~1030
+    for k in (1035, 1040, 1045):               # ticks, as the plugin does every 10 s
+        det.tick(T0 + k)
+    assert det.shots_today == 1
 
 
-def test_backflush_is_not_split_by_a_long_run_still_in_progress():
-    # 26 Sep: a 30 s run, then 100 s later a 63 s run - the 2-minute window from the
-    # first run elapses while the second is still pumping
+def test_without_start_backflush_every_pump_run_is_a_shot():
+    # Backflush runs can't be told from shots by power alone (issue #3), so there is no
+    # automatic backflush rule any more.
     det = ready_machine()
-    s = shot(1000, seconds=30) + idle_until(1040, 1130)
-    s += shot(1130, seconds=63) + idle_until(1200, 1210)
-    s += shot(1210, seconds=30) + idle_until(1250, 1700)
-    ev = feed(det, s)
+    s, at = [], 1000
+    for _ in range(3):
+        s += shot(at, seconds=30) + idle_until(at + 40, at + 60)
+        at += 60
+    ev = feed(det, s + idle_until(at, at + 600))
+    assert types(ev).count("shotFinished") == 3
+    assert "backflushFinished" not in types(ev)
+
+
+def backflush_runs(at, pattern):
+    """Pump runs with the given lengths, 10 s apart (how Simon's backflush shows)."""
+    s = []
+    for seconds in pattern:
+        s += shot(at, seconds=seconds)
+        at += seconds + 10
+    return s, at
+
+
+def test_start_backflush_counts_one_long_run_as_one_backflush():
+    det = ready_machine()
+    det.start_backflush(T0 + 990)
+    assert det.current_status(T0 + 991) == "backflushing"
+    s, end = backflush_runs(1000, [75])
+    ev = feed(det, s + idle_until(end, end + 400))
     assert types(ev).count("backflushFinished") == 1
     assert "shotFinished" not in types(ev)
+    assert det.last_backflush is not None and det.shots_today == 0
+    assert det.current_status(T0 + end + 400) == "ready"
+
+
+def test_start_backflush_counts_several_runs_as_one_backflush():
+    det = ready_machine()
+    det.start_backflush(T0 + 990)
+    s, end = backflush_runs(1000, [35, 33, 20])
+    ev = feed(det, s + idle_until(end, end + 400))
+    bf = [e for e in ev if e["type"] == "backflushFinished"]
+    assert len(bf) == 1 and bf[0]["runs"] == 3
+    assert "shotFinished" not in types(ev)
+    assert abs(bf[0]["t"] - (T0 + end - 10)) <= 6        # recorded at the end of the last run
+
+
+def test_shot_before_start_backflush_is_still_a_shot():
+    # 26 Sep: a kept shot at 15:28, then the backflush at 15:30
+    det = ready_machine()
+    s = shot(1000) + idle_until(1040, 1100)
+    ev = feed(det, s)
+    ev += det.start_backflush(T0 + 1100)
+    s2, end = backflush_runs(1110, [60])
+    ev += feed(det, s2 + idle_until(end, end + 400))
+    assert types(ev).count("shotFinished") == 1
+    assert types(ev).count("backflushFinished") == 1
+
+
+def test_start_backflush_with_no_pumping_cancels_after_ten_minutes():
+    det = ready_machine()
+    det.start_backflush(T0 + 1000)
+    keep_warm = []
+    for k in range(1010, 1700, 40):
+        keep_warm += [(k, 1390, True), (k + 3, 1.5, True)]
+    ev = feed(det, keep_warm)
+    assert "backflushFinished" not in types(ev)
+    assert det.current_status(T0 + 1700) == "ready"
+    assert det.last_backflush is None
+
+
+def test_backflush_water_still_counts_towards_the_tank():
+    det = ready_machine()
+    before = det.pump_seconds
+    det.start_backflush(T0 + 990)
+    s, end = backflush_runs(1000, [35, 33])
+    feed(det, s + idle_until(end, end + 400))
+    assert det.pump_seconds - before >= 60
+
+
+def test_backflush_session_survives_a_restart():
+    det = ready_machine()
+    det.start_backflush(T0 + 990)
+    s, end = backflush_runs(1000, [35])
+    feed(det, s + [(end + 5, 1.5, True)])
+    again = Detector(BIANCA, saved=det.snapshot())
+    s2, end2 = backflush_runs(end + 10, [30])
+    ev = feed(again, s2 + idle_until(end2, end2 + 400))
+    assert types(ev).count("backflushFinished") == 1 and "shotFinished" not in types(ev)
+

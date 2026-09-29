@@ -45,15 +45,25 @@ def test_both_boilers_morning_sep25():
     assert not replay.of(ev, "tankEmpty")
 
 
-def test_backflush_sep26():
+def test_backflush_sep26_with_start_backflush_pressed():
+    # 26 Sep afternoon: sink shot 15:23, kept shot 15:28, backflush 15:30-15:33 (Simon).
+    # Simulate "Start backflush" being pressed at 15:30.
+    rows = replay.load("sep26-backflush.csv")
+    press = at(26, "15:30")
     d = det()
-    ev = replay.run(d, replay.load("sep26-backflush.csv"))
+    ev = replay.run(d, [r for r in rows if r[0] < press])
+    ev += d.start_backflush(press)
+    ev += replay.run(d, [r for r in rows if r[0] >= press], plug=True)
     bf = replay.of(ev, "backflushFinished")
-    assert len(bf) == 1 and at(26, "15:20") <= bf[0]["t"] <= at(26, "15:40")
-    # 15:23 was a real shot followed by a flush, confirmed by Simon; the backflush
-    # started 5.5 min later. Only that shot counts; no backflush cycle does.
+    assert len(bf) == 1 and at(26, "15:32") <= bf[0]["t"] <= at(26, "15:36")   # top-ups can extend it
     shots = [s for s in replay.of(ev, "shotFinished") if at(26, "15:20") <= s["start"] <= at(26, "15:40")]
-    assert len(shots) == 1 and shots[0]["start"] < at(26, "15:24")
+    assert len(shots) == 2 and all(s["start"] < press for s in shots)
+
+
+def test_backflush_without_the_button_counts_as_shots_sep26():
+    # No automatic backflush rule: power alone can't tell a backflush from a shot (#3)
+    ev = replay.run(det(), replay.load("sep26-backflush.csv"))
+    assert not replay.of(ev, "backflushFinished")
 
 
 def test_tank_ran_dry_sep26_morning():
@@ -86,9 +96,7 @@ def test_two_weeks_no_false_alarms():
     for s in replay.of(ev, "shotFinished"):
         day = dt.datetime.fromtimestamp(s["start"], LONDON).day
         per_day[day] = per_day.get(day, 0) + 1
-    assert all(n <= 5 for n in per_day.values()), per_day
     assert sum(per_day.values()) >= 12, per_day      # at least most mornings found
-    assert len(replay.of(ev, "backflushFinished")) == 1
 
 
 def test_shot_with_low_pump_heater_readings_sep29():
