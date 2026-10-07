@@ -57,6 +57,7 @@
             <State id="lastBackflush"><ValueType>String</ValueType><TriggerLabel>Last backflush</TriggerLabel><ControlPageLabel>Last backflush</ControlPageLabel></State>
             <State id="daysSinceBackflush"><ValueType>Integer</ValueType><TriggerLabel>Days since backflush</TriggerLabel><ControlPageLabel>Days since backflush</ControlPageLabel></State>
             <State id="pumpSecondsSinceRefill"><ValueType>Integer</ValueType><TriggerLabel>Pump seconds since refill</TriggerLabel><ControlPageLabel>Pump seconds since refill</ControlPageLabel></State>
+            <State id="shotsSinceRefill"><ValueType>Integer</ValueType><TriggerLabel>Shots since refill</TriggerLabel><ControlPageLabel>Shots since refill</ControlPageLabel></State>
             <State id="tankPercentUsed"><ValueType>Integer</ValueType><TriggerLabel>Tank % used</TriggerLabel><ControlPageLabel>Tank % used</ControlPageLabel></State>
             <State id="tankLearnedPumpSeconds"><ValueType>Integer</ValueType><TriggerLabel>Learned tank (pump s)</TriggerLabel><ControlPageLabel>Learned tank (pump s)</ControlPageLabel></State>
             <State id="detectorState"><ValueType>String</ValueType><TriggerLabel>Detector state (internal)</TriggerLabel><ControlPageLabel>Detector state</ControlPageLabel></State>

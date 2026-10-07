@@ -11,13 +11,14 @@ def test_info_plist():
         info = plistlib.load(f)
     assert info["CFBundleDisplayName"] == "Espresso Monitor"
     assert info["CFBundleIdentifier"] == "com.simons-plugins.indigo-espresso"
-    assert info["PluginVersion"] == "2026.0.6"
+    assert info["PluginVersion"] == "2026.1.0"
 
 import profiles  # noqa: E402
 
 STATES = ["status", "statusText", "lastHeatUpSeconds", "readySince", "shotsToday", "shotsTotal",
           "lastShotSeconds", "lastShotTime", "steamsToday", "lastBackflush", "daysSinceBackflush",
-          "pumpSecondsSinceRefill", "tankPercentUsed", "tankLearnedPumpSeconds", "detectorState"]
+          "pumpSecondsSinceRefill", "shotsSinceRefill", "tankPercentUsed", "tankLearnedPumpSeconds",
+          "detectorState"]
 EVENTS = ["machineReady", "shotFinished", "steamFinished", "backflushFinished", "ecoEntered",
           "tankEmpty", "tankLow", "tankRefilled"]
 

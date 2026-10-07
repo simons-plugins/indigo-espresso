@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026.1.0
+- Fix: isolated pump-band readings between keep-warm heater bursts no longer count as water. On real Bianca data (3-7 Oct), these blips were ~80% of the counted pump time (~1,357 of 1,689 s); real shots and flushes were ~300 s. Water is now only credited for a run of pump readings with nothing idle in between.
+- New **Shots since refill** counter, alongside pump seconds since refill.
+- The event log now says how many shots and pump-seconds a tank lasted when it runs dry.
+- The learned tank size is cleared once (it was learned under the old, inflated count) and relearned the next time the tank runs dry.
+
 ## 2026.0.6
 - New **Start backflush** action and menu item: pump runs until 2 min after the last one count as one backflush, not shots.
 - Removed the automatic backflush rule. It relied on how many pump runs the plug happened to show, which is chance (#3). Without the button, backflush cycles count as shots.

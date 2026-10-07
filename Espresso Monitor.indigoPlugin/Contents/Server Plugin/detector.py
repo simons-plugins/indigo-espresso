@@ -28,6 +28,7 @@ ECO_MARGIN_S = 3 * 60      # eco silence may start this long before the timeout
 ECO_SILENCE_S = 3 * 60
 MIN_TANKFUL_S = 60         # a learned tankful must be at least this many pump-seconds...
 MIN_TANKFUL_SHARE = 0.5    # ...and at least this share of the median so far (else: false empty)
+WATER_COUNT_VERSION = 2    # bump when the water-counting rule changes; invalidates saved tankHistory
 
 IDLE, PUMP, PUMPHEAT, STEAM, BREW, OTHER = "idle", "pump", "pumpHeat", "steam", "brew", "other"
 
@@ -66,8 +67,14 @@ class Detector:
         self.ready_since = s.get("readySince")
         self.last_backflush = s.get("lastBackflush")
         self.pump_seconds = float(s.get("pumpSeconds", 0.0))
+        self.shots_since_refill = int(s.get("shotsSinceRefill", 0))
         self.tank_history = [float(x) for x in s.get("tankHistory", [])]
         self.tank_low_fired = bool(s.get("tankLowFired", False))
+        if saved is not None and int(s.get("waterCount", 0)) < WATER_COUNT_VERSION:
+            # tankHistory was learned under the old per-episode water-counting rule
+            # (counted isolated keep-warm blips as water); discard and relearn.
+            self.tank_history = []
+            self.tank_low_fired = False
         # Transient state, rebuilt from readings.
         self.suspended = saved is not None      # no silence rules until the first reading
         self.last_t = None
@@ -77,6 +84,7 @@ class Detector:
         self.run_start = None                   # current heater run (>= heaterMinW)
         self.ready_candidate = self.heat_start if self.status == "heating" else None
         self.ep = None                          # current pump episode {start, last, n}
+        self.water = None                       # current water segment {start, last, n} - not persisted
         # The backflush session and the steam window are saved too: a device restart
         # (saving its settings does one) must not lose a backflush or a steam.
         self.backflush = dict(s["backflush"]) if s.get("backflush") else None   # {start, lastRun, runs}
@@ -117,6 +125,8 @@ class Detector:
             events += self._on_draw(t, watts)
         self._track_heater(t, watts)
         cls = self.classify(watts)
+        if cls == IDLE and self.water is not None:
+            events += self._close_water_segment()
         if cls in (PUMP, PUMPHEAT) and self.status != "off":
             if not (self.ep and t - self.ep["last"] <= PUMP_GAP_S):
                 self.ep = {"start": t, "last": t, "n": 0, "heat": 0}
@@ -124,6 +134,10 @@ class Detector:
             self.ep["n"] += 1
             if cls == PUMPHEAT:
                 self.ep["heat"] += 1
+            if not (self.water and t - self.water["last"] <= PUMP_GAP_S):
+                self.water = {"start": t, "last": t, "n": 0}
+            self.water["last"] = t
+            self.water["n"] += 1
         self.last_t, self.last_watts = t, watts
         return events
 
@@ -133,6 +147,7 @@ class Detector:
     def mark_refilled(self, t):
         self.pump_seconds = 0.0
         self.tank_low_fired = False
+        self.shots_since_refill = 0
         if self.status in ("tankEmpty", "noDraw"):
             self._start_heating(t, user=True)
         return [{"type": "tankRefilled", "t": t, "manual": True}]
@@ -172,6 +187,7 @@ class Detector:
             "lastShotSeconds": self.last_shot_seconds, "lastShotTime": self.last_shot_time,
             "lastHeatUpSeconds": self.last_heat_up_seconds, "readySince": self.ready_since,
             "lastBackflush": self.last_backflush, "pumpSeconds": self.pump_seconds,
+            "shotsSinceRefill": self.shots_since_refill, "waterCount": WATER_COUNT_VERSION,
             "tankHistory": self.tank_history, "tankLowFired": self.tank_low_fired,
             "backflush": self.backflush, "steamWindowEnd": self.steam_window_end, "steamAcc": self.steam_acc,
             "steamConfirmed": self.steam_confirmed, "steamLast": self.steam_last,
@@ -198,6 +214,8 @@ class Detector:
             self.fill_exempt_until = t + STARTUP_FILL_S
         else:
             events += self._finish_backflush()
+            if self.water is not None:
+                events += self._close_water_segment()
             self.status = "off"
             self.ep = None
             self.run_start = None
@@ -220,6 +238,7 @@ class Detector:
             events.append({"type": "tankRefilled", "t": t, "manual": False})
             self.pump_seconds = 0.0
             self.tank_low_fired = False
+            self.shots_since_refill = 0
             self._start_heating(t, user=True)
             self.last_active_t = t
         if self.status == "heating":
@@ -252,6 +271,8 @@ class Detector:
             self.day = day
         if self.ep and t - self.ep["last"] > PUMP_GAP_S:
             events += self._close_episode()
+        if self.water and t - self.water["last"] > PUMP_GAP_S:
+            events += self._close_water_segment()
         events += self._advance_steam(t)
         bf = self.backflush
         if bf and self.ep is None:
@@ -283,8 +304,6 @@ class Detector:
         events = []
         seconds = ep["last"] - ep["start"] + SAMPLE_S
         if ep["n"] >= 2:
-            self.pump_seconds += seconds
-            events += self._check_tank_low(ep["last"])
             if self.backflush:
                 self.backflush["runs"] += 1
                 self.backflush["lastRun"] = ep["last"] + SAMPLE_S
@@ -304,9 +323,21 @@ class Detector:
         self.steam_last = None
         return events
 
+    def _close_water_segment(self):
+        """Close the contiguous pump-reading segment used for the water (tank) count.
+
+        Unlike a pump episode, a segment is broken by any idle reading, so isolated
+        pump-band blips between keep-warm heater bursts (n == 1) credit nothing."""
+        seg, self.water = self.water, None
+        if seg["n"] < 2:
+            return []
+        self.pump_seconds += seg["last"] - seg["start"] + SAMPLE_S
+        return self._check_tank_low(seg["last"])
+
     def _record_shot(self, start, end, seconds):
         self.shots_today += 1
         self.shots_total += 1
+        self.shots_since_refill += 1
         self.last_shot_seconds = round(seconds)
         self.last_shot_time = start
         return [{"type": "shotFinished", "t": end, "start": start, "seconds": round(seconds)}]
@@ -334,8 +365,11 @@ class Detector:
                 if self.tank_history else MIN_TANKFUL_S
             if self.pump_seconds >= floor:
                 self.tank_history = (self.tank_history + [self.pump_seconds])[-3:]
+            shots, pump_seconds = self.shots_since_refill, round(self.pump_seconds)
             self.pump_seconds = 0.0
             self.tank_low_fired = False
+            self.shots_since_refill = 0
+            return [{"type": "tankEmpty", "t": t, "reason": reason, "shots": shots, "pumpSeconds": pump_seconds}]
         return [{"type": "tankEmpty", "t": t, "reason": reason}]
 
     def _advance_status(self, t):

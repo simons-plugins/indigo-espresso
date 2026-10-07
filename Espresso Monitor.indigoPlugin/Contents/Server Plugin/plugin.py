@@ -103,8 +103,12 @@ class Plugin(indigo.PluginBase):
 
     def _apply(self, dev, events, now):
         for event in events:
-            self.logger.info(f"{dev.name}: {event['type']}" +
-                             (f" ({event['seconds']} s)" if "seconds" in event else ""))
+            if event["type"] == "tankEmpty" and "shots" in event:
+                self.logger.info(f"{dev.name}: tank empty after {event['shots']} shots, "
+                                  f"{event['pumpSeconds']} pump-s")
+            else:
+                self.logger.info(f"{dev.name}: {event['type']}" +
+                                 (f" ({event['seconds']} s)" if "seconds" in event else ""))
             self._fire(event["type"], dev.id)
         self._write_states(dev, now)
 
@@ -130,6 +134,7 @@ class Plugin(indigo.PluginBase):
             "lastBackflush": _fmt(det.last_backflush),
             "daysSinceBackflush": days if days is not None else -1,
             "pumpSecondsSinceRefill": round(det.pump_seconds),
+            "shotsSinceRefill": det.shots_since_refill,
             "tankPercentUsed": tank_pct if tank_pct is not None else -1,
             "tankLearnedPumpSeconds": det.tank_learned_seconds() or 0,
             "detectorState": json.dumps(det.snapshot()),

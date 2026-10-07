@@ -2,7 +2,7 @@ import datetime as dt
 from zoneinfo import ZoneInfo
 
 import profiles
-from detector import Detector
+from detector import Detector, WATER_COUNT_VERSION
 
 BIANCA = profiles.preset_thresholds("biancaV3")
 T0 = 1_790_000_000.0
@@ -268,3 +268,102 @@ def test_steaming_after_a_shot_survives_a_restart():
     for k in range(1110, 1300, 10):
         ev += again.tick(T0 + k)
     assert types(ev).count("steamFinished") == 1
+
+
+# ---- water (tank) counting from contiguous pump segments, not episodes ----
+
+def blips(n, start=200, period=40):
+    """Isolated pump-band glitches around a keep-warm heater burst's cool-down: pump,
+    idle, pump, idle, 3 s apart - the pattern seen on real Bianca data between bursts."""
+    s = []
+    t = start
+    for _ in range(n):
+        s += [(t, 242, True), (t + 3, 1.2, True), (t + 6, 244, True), (t + 9, 1.2, True)]
+        t += period
+    return s
+
+
+def test_isolated_pump_band_blips_between_bursts_do_not_count_as_water():
+    det = Detector(BIANCA)
+    warm_on(det)
+    feed(det, blips(30))
+    assert det.pump_seconds == 0
+
+
+def test_short_contiguous_flush_is_credited():
+    det = Detector(BIANCA)
+    warm_on(det)
+    feed(det, [(400, 233, True), (403, 233, True), (406, 233, True), (409, 1.5, True)])
+    assert det.pump_seconds == 9.0
+
+
+def test_real_pump_run_is_credited_as_water_and_a_shot():
+    det = Detector(BIANCA)
+    warm_on(det)
+    feed(det, pump(400, 27))
+    assert det.pump_seconds == 27.0        # credited at once, on the closing idle reading
+    ticks(det, 431, 20)                    # the gap past PUMP_GAP_S closes the episode too
+    assert det.shots_since_refill == 1
+
+
+def test_water_segment_ending_in_silence_is_credited():
+    det = Detector(BIANCA)
+    warm_on(det)
+    feed(det, [(400, 233, True), (403, 233, True), (406, 233, True)])   # no closing idle reading
+    assert det.pump_seconds == 0                                       # still open
+    det.tick(T0 + 420)                                                  # 420 - 406 > PUMP_GAP_S
+    assert det.pump_seconds == 9.0
+
+
+def test_shots_since_refill_resets_on_manual_refill():
+    det = Detector(BIANCA)
+    det.shots_since_refill = 4
+    det.mark_refilled(T0)
+    assert det.shots_since_refill == 0
+
+
+def test_shots_since_refill_resets_on_auto_refill():
+    det = Detector(BIANCA)
+    warm_on(det)
+    feed(det, pump(400, 60))
+    ticks(det, 461, 10 * 60)
+    assert det.status == "tankEmpty"
+    det.shots_since_refill = 3
+    ev = feed(det, [(1100, 230, True), (1103, 1400, True)])
+    assert "tankRefilled" in types(ev)
+    assert det.shots_since_refill == 0
+
+
+def test_shots_since_refill_survives_snapshot_round_trip():
+    det = Detector(BIANCA)
+    det.shots_since_refill = 5
+    again = Detector(BIANCA, saved=det.snapshot())
+    assert again.shots_since_refill == 5
+
+
+def test_old_snapshot_without_water_count_discards_tank_history():
+    saved = {"tankHistory": [893.8], "pumpSeconds": 42.0, "tankLowFired": True, "status": "ready"}
+    det = Detector(BIANCA, saved=saved)
+    assert det.tank_history == []
+    assert det.tank_low_fired is False
+    assert det.pump_seconds == 42.0        # pump_seconds itself is kept as-is
+
+
+def test_snapshot_with_current_water_count_keeps_tank_history():
+    saved = {"tankHistory": [300.0], "waterCount": WATER_COUNT_VERSION, "status": "ready"}
+    det = Detector(BIANCA, saved=saved)
+    assert det.tank_history == [300.0]
+
+
+def test_tank_empty_event_carries_shots_and_pump_seconds():
+    det = Detector(BIANCA)
+    warm_on(det)
+    feed(det, pump(400, 30))
+    ticks(det, 431, 60)              # let the pump run settle into its (spurious) shot first
+    det.shots_since_refill = 2       # as if two real shots had been pulled from this tank
+    ev = ticks(det, 491, 10 * 60)
+    empty = [e for e in ev if e["type"] == "tankEmpty"]
+    assert len(empty) == 1 and empty[0]["reason"] == "silence"
+    assert empty[0]["shots"] == 2
+    assert empty[0]["pumpSeconds"] == 30
+    assert det.shots_since_refill == 0
