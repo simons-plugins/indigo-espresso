@@ -347,6 +347,7 @@ def test_old_snapshot_without_water_count_discards_tank_history():
     assert det.tank_history == []
     assert det.tank_low_fired is False
     assert det.pump_seconds == 42.0        # pump_seconds itself is kept as-is
+    assert det.skip_next_learn is True     # it's blip-inflated; don't let the next run-dry learn it
 
 
 def test_snapshot_with_current_water_count_keeps_tank_history():
@@ -359,11 +360,78 @@ def test_tank_empty_event_carries_shots_and_pump_seconds():
     det = Detector(BIANCA)
     warm_on(det)
     feed(det, pump(400, 30))
-    ticks(det, 431, 60)              # let the pump run settle into its (spurious) shot first
-    det.shots_since_refill = 2       # as if two real shots had been pulled from this tank
-    ev = ticks(det, 491, 10 * 60)
+    ticks(det, 431, 20)               # let the first shot's episode close
+    feed(det, pump(600, 30))
+    ev = ticks(det, 631, 10 * 60)      # closes the second shot, then silence empties the tank
     empty = [e for e in ev if e["type"] == "tankEmpty"]
     assert len(empty) == 1 and empty[0]["reason"] == "silence"
     assert empty[0]["shots"] == 2
-    assert empty[0]["pumpSeconds"] == 30
+    assert empty[0]["pumpSeconds"] == 60
     assert det.shots_since_refill == 0
+    assert det.pump_seconds == 0
+
+
+# ---- migration contamination (skip_next_learn) -----------------------------
+
+def test_migrated_mid_tank_skips_the_next_learn_but_not_the_one_after():
+    saved = {"pumpSeconds": 1400.0}        # old-rule, blip-inflated, mid-tank
+    det = Detector(BIANCA, saved=saved)
+    assert det.skip_next_learn is True
+    empty_after_shot(det)                   # first silence tankEmpty since the migration
+    assert det.tank_history == []           # the inflated carry-over was not learned
+    assert det.skip_next_learn is False
+    feed(det, [(1100, 230, True), (1103, 1400, True)])   # auto-refill
+    warm_on(det, at=1150)
+    feed(det, pump(1400, 60))
+    ev = ticks(det, 1461, 10 * 60)
+    assert types(ev).count("tankEmpty") == 1
+    assert det.tank_history and det.tank_history[0] >= 60   # this one learns normally
+
+
+def test_migrated_with_zero_pump_seconds_learns_normally():
+    saved = {"pumpSeconds": 0.0}           # tank was empty/just refilled at the upgrade
+    det = Detector(BIANCA, saved=saved)
+    assert det.skip_next_learn is False
+    empty_after_shot(det)
+    assert det.tank_history and det.tank_history[0] >= 60
+
+
+def test_mark_refilled_after_migration_clears_skip_next_learn():
+    saved = {"pumpSeconds": 500.0}
+    det = Detector(BIANCA, saved=saved)
+    assert det.skip_next_learn is True
+    det.mark_refilled(T0)
+    assert det.skip_next_learn is False
+
+
+# ---- gaps found in review ---------------------------------------------------
+
+def test_plug_off_with_an_open_water_segment_credits_it():
+    det = Detector(BIANCA)
+    warm_on(det)
+    feed(det, [(400, 233, True), (403, 233, True), (406, 233, True)])  # open segment, no closing idle
+    assert det.pump_seconds == 0                                       # still open
+    feed(det, [(409, 1.5, False)])                                     # plug off before any idle reading
+    assert det.pump_seconds == 9.0
+
+
+def test_non_idle_reading_mid_gap_does_not_split_the_water_segment():
+    # Only an idle reading (or an elapsed PUMP_GAP_S) marks the pump as stopped: a
+    # non-idle heater-only reading (e.g. 1327 W) between two pump readings leaves
+    # the water segment open, by design.
+    det = Detector(BIANCA)
+    warm_on(det)
+    feed(det, [(400, 233, True), (405, 1327, True), (408, 233, True), (411, 1.5, True)])
+    assert det.pump_seconds == 11.0
+
+
+def test_no_draw_tank_empty_leaves_counters_unchanged():
+    det = Detector(BIANCA)
+    det.shots_since_refill = 3
+    det.pump_seconds = 45.0
+    feed(det, [(0, 1.7, True)])            # plug on, heating, never a draw
+    ev = ticks(det, 1, 4 * 60)             # past noDrawMin (3 min) with zero draw
+    empty = [e for e in ev if e["type"] == "tankEmpty"]
+    assert len(empty) == 1 and empty[0]["reason"] == "noDraw"
+    assert det.shots_since_refill == 3
+    assert det.pump_seconds == 45.0

@@ -70,11 +70,15 @@ class Detector:
         self.shots_since_refill = int(s.get("shotsSinceRefill", 0))
         self.tank_history = [float(x) for x in s.get("tankHistory", [])]
         self.tank_low_fired = bool(s.get("tankLowFired", False))
+        self.skip_next_learn = bool(s.get("skipNextLearn", False))
         if saved is not None and int(s.get("waterCount", 0)) < WATER_COUNT_VERSION:
             # tankHistory was learned under the old per-episode water-counting rule
             # (counted isolated keep-warm blips as water); discard and relearn.
             self.tank_history = []
             self.tank_low_fired = False
+            # pump_seconds was counted under the old (blip-inflated) rule too; if the
+            # tank was already part-used, don't let the next run-dry learn that number.
+            self.skip_next_learn = self.pump_seconds > 0
         # Transient state, rebuilt from readings.
         self.suspended = saved is not None      # no silence rules until the first reading
         self.last_t = None
@@ -84,7 +88,8 @@ class Detector:
         self.run_start = None                   # current heater run (>= heaterMinW)
         self.ready_candidate = self.heat_start if self.status == "heating" else None
         self.ep = None                          # current pump episode {start, last, n}
-        self.water = None                       # current water segment {start, last, n} - not persisted
+        self.water = None                       # current water segment {start, last, n} - not persisted;
+                                                 # a restart mid-run drops that run's water, as the old episode did.
         # The backflush session and the steam window are saved too: a device restart
         # (saving its settings does one) must not lose a backflush or a steam.
         self.backflush = dict(s["backflush"]) if s.get("backflush") else None   # {start, lastRun, runs}
@@ -148,6 +153,7 @@ class Detector:
         self.pump_seconds = 0.0
         self.tank_low_fired = False
         self.shots_since_refill = 0
+        self.skip_next_learn = False
         if self.status in ("tankEmpty", "noDraw"):
             self._start_heating(t, user=True)
         return [{"type": "tankRefilled", "t": t, "manual": True}]
@@ -189,6 +195,7 @@ class Detector:
             "lastBackflush": self.last_backflush, "pumpSeconds": self.pump_seconds,
             "shotsSinceRefill": self.shots_since_refill, "waterCount": WATER_COUNT_VERSION,
             "tankHistory": self.tank_history, "tankLowFired": self.tank_low_fired,
+            "skipNextLearn": self.skip_next_learn,
             "backflush": self.backflush, "steamWindowEnd": self.steam_window_end, "steamAcc": self.steam_acc,
             "steamConfirmed": self.steam_confirmed, "steamLast": self.steam_last,
         }
@@ -239,6 +246,7 @@ class Detector:
             self.pump_seconds = 0.0
             self.tank_low_fired = False
             self.shots_since_refill = 0
+            self.skip_next_learn = False
             self._start_heating(t, user=True)
             self.last_active_t = t
         if self.status == "heating":
@@ -363,7 +371,11 @@ class Detector:
         if reason != "noDraw":
             floor = max(MIN_TANKFUL_S, MIN_TANKFUL_SHARE * statistics.median(self.tank_history)) \
                 if self.tank_history else MIN_TANKFUL_S
-            if self.pump_seconds >= floor:
+            if self.skip_next_learn:
+                # pump_seconds carries a count from before this run-dry that we can't
+                # trust (e.g. blip-inflated at a migration); don't learn from it.
+                self.skip_next_learn = False
+            elif self.pump_seconds >= floor:
                 self.tank_history = (self.tank_history + [self.pump_seconds])[-3:]
             shots, pump_seconds = self.shots_since_refill, round(self.pump_seconds)
             self.pump_seconds = 0.0
