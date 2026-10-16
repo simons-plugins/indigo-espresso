@@ -11,13 +11,14 @@ def test_info_plist():
         info = plistlib.load(f)
     assert info["CFBundleDisplayName"] == "Espresso Monitor"
     assert info["CFBundleIdentifier"] == "com.simons-plugins.indigo-espresso"
-    assert info["PluginVersion"] == "2026.0.6"
+    assert info["PluginVersion"] == "2026.1.1"
 
 import profiles  # noqa: E402
 
 STATES = ["status", "statusText", "lastHeatUpSeconds", "readySince", "shotsToday", "shotsTotal",
           "lastShotSeconds", "lastShotTime", "steamsToday", "lastBackflush", "daysSinceBackflush",
-          "pumpSecondsSinceRefill", "tankPercentUsed", "tankLearnedPumpSeconds", "detectorState"]
+          "pumpSecondsSinceRefill", "shotsSinceRefill", "tankPercentUsed", "tankLearnedPumpSeconds",
+          "detectorState"]
 EVENTS = ["machineReady", "shotFinished", "steamFinished", "backflushFinished", "ecoEntered",
           "tankEmpty", "tankLow", "tankRefilled"]
 
@@ -46,5 +47,5 @@ def test_events_match_detector_event_types():
 
 
 def test_actions_and_menu():
-    assert [a.get("id") for a in parse("Actions.xml")] == ["startBackflush", "markTankRefilled", "resetCounters"]
-    assert [m.get("id") for m in parse("MenuItems.xml")] == ["startBackflushMenu", "markTankRefilledMenu"]
+    assert [a.get("id") for a in parse("Actions.xml")] == ["startBackflush", "markTankRefilled", "markTankRefilledAfterEmpty", "resetCounters"]
+    assert [m.get("id") for m in parse("MenuItems.xml")] == ["startBackflushMenu", "markTankRefilledMenu", "markTankRefilledAfterEmptyMenu"]

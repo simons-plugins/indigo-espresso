@@ -2,7 +2,7 @@ import datetime as dt
 from zoneinfo import ZoneInfo
 
 import profiles
-from detector import Detector
+from detector import Detector, WATER_COUNT_VERSION
 
 BIANCA = profiles.preset_thresholds("biancaV3")
 T0 = 1_790_000_000.0
@@ -268,3 +268,229 @@ def test_steaming_after_a_shot_survives_a_restart():
     for k in range(1110, 1300, 10):
         ev += again.tick(T0 + k)
     assert types(ev).count("steamFinished") == 1
+
+
+# ---- water (tank) counting from contiguous pump segments, not episodes ----
+
+def blips(n, start=200, period=40):
+    """Isolated pump-band glitches around a keep-warm heater burst's cool-down: pump,
+    idle, pump, idle, 3 s apart - the pattern seen on real Bianca data between bursts."""
+    s = []
+    t = start
+    for _ in range(n):
+        s += [(t, 242, True), (t + 3, 1.2, True), (t + 6, 244, True), (t + 9, 1.2, True)]
+        t += period
+    return s
+
+
+def test_isolated_pump_band_blips_between_bursts_do_not_count_as_water():
+    det = Detector(BIANCA)
+    warm_on(det)
+    feed(det, blips(30))
+    assert det.pump_seconds == 0
+
+
+def test_short_contiguous_flush_is_credited():
+    det = Detector(BIANCA)
+    warm_on(det)
+    feed(det, [(400, 233, True), (403, 233, True), (406, 233, True), (409, 1.5, True)])
+    assert det.pump_seconds == 9.0
+
+
+def test_real_pump_run_is_credited_as_water_and_a_shot():
+    det = Detector(BIANCA)
+    warm_on(det)
+    feed(det, pump(400, 27))
+    assert det.pump_seconds == 27.0        # credited at once, on the closing idle reading
+    ticks(det, 431, 20)                    # the gap past PUMP_GAP_S closes the episode too
+    assert det.shots_since_refill == 1
+
+
+def test_water_segment_ending_in_silence_is_credited():
+    det = Detector(BIANCA)
+    warm_on(det)
+    feed(det, [(400, 233, True), (403, 233, True), (406, 233, True)])   # no closing idle reading
+    assert det.pump_seconds == 0                                       # still open
+    det.tick(T0 + 420)                                                  # 420 - 406 > PUMP_GAP_S
+    assert det.pump_seconds == 9.0
+
+
+def test_shots_since_refill_resets_on_manual_refill():
+    det = Detector(BIANCA)
+    det.shots_since_refill = 4
+    det.mark_refilled(T0)
+    assert det.shots_since_refill == 0
+
+
+def test_shots_since_refill_resets_on_auto_refill():
+    det = Detector(BIANCA)
+    warm_on(det)
+    feed(det, pump(400, 60))
+    ticks(det, 461, 10 * 60)
+    assert det.status == "tankEmpty"
+    det.shots_since_refill = 3
+    ev = feed(det, [(1100, 230, True), (1103, 1400, True)])
+    assert "tankRefilled" in types(ev)
+    assert det.shots_since_refill == 0
+
+
+def test_shots_since_refill_survives_snapshot_round_trip():
+    det = Detector(BIANCA)
+    det.shots_since_refill = 5
+    again = Detector(BIANCA, saved=det.snapshot())
+    assert again.shots_since_refill == 5
+
+
+def test_old_snapshot_without_water_count_discards_tank_history():
+    saved = {"tankHistory": [893.8], "pumpSeconds": 42.0, "tankLowFired": True, "status": "ready"}
+    det = Detector(BIANCA, saved=saved)
+    assert det.tank_history == []
+    assert det.tank_low_fired is False
+    assert det.pump_seconds == 42.0        # pump_seconds itself is kept as-is
+    assert det.skip_next_learn is True     # it's blip-inflated; don't let the next run-dry learn it
+
+
+def test_snapshot_with_current_water_count_keeps_tank_history():
+    saved = {"tankHistory": [300.0], "waterCount": WATER_COUNT_VERSION, "status": "ready"}
+    det = Detector(BIANCA, saved=saved)
+    assert det.tank_history == [300.0]
+
+
+def test_tank_empty_event_carries_shots_and_pump_seconds():
+    det = Detector(BIANCA)
+    warm_on(det)
+    feed(det, pump(400, 30))
+    ticks(det, 431, 20)               # let the first shot's episode close
+    feed(det, pump(600, 30))
+    ev = ticks(det, 631, 10 * 60)      # closes the second shot, then silence empties the tank
+    empty = [e for e in ev if e["type"] == "tankEmpty"]
+    assert len(empty) == 1 and empty[0]["reason"] == "silence"
+    assert empty[0]["shots"] == 2
+    assert empty[0]["pumpSeconds"] == 60
+    assert det.shots_since_refill == 0
+    assert det.pump_seconds == 0
+
+
+# ---- migration contamination (skip_next_learn) -----------------------------
+
+def test_migrated_mid_tank_skips_the_next_learn_but_not_the_one_after():
+    saved = {"pumpSeconds": 1400.0}        # old-rule, blip-inflated, mid-tank
+    det = Detector(BIANCA, saved=saved)
+    assert det.skip_next_learn is True
+    empty_after_shot(det)                   # first silence tankEmpty since the migration
+    assert det.tank_history == []           # the inflated carry-over was not learned
+    assert det.skip_next_learn is False
+    feed(det, [(1100, 230, True), (1103, 1400, True)])   # auto-refill
+    warm_on(det, at=1150)
+    feed(det, pump(1400, 60))
+    ev = ticks(det, 1461, 10 * 60)
+    assert types(ev).count("tankEmpty") == 1
+    assert det.tank_history and det.tank_history[0] >= 60   # this one learns normally
+
+
+def test_migrated_with_zero_pump_seconds_learns_normally():
+    saved = {"pumpSeconds": 0.0}           # tank was empty/just refilled at the upgrade
+    det = Detector(BIANCA, saved=saved)
+    assert det.skip_next_learn is False
+    empty_after_shot(det)
+    assert det.tank_history and det.tank_history[0] >= 60
+
+
+def test_mark_refilled_after_migration_clears_skip_next_learn():
+    saved = {"pumpSeconds": 500.0}
+    det = Detector(BIANCA, saved=saved)
+    assert det.skip_next_learn is True
+    det.mark_refilled(T0)
+    assert det.skip_next_learn is False
+
+
+# ---- gaps found in review ---------------------------------------------------
+
+def test_plug_off_with_an_open_water_segment_credits_it():
+    det = Detector(BIANCA)
+    warm_on(det)
+    feed(det, [(400, 233, True), (403, 233, True), (406, 233, True)])  # open segment, no closing idle
+    assert det.pump_seconds == 0                                       # still open
+    feed(det, [(409, 1.5, False)])                                     # plug off before any idle reading
+    assert det.pump_seconds == 9.0
+
+
+def test_non_idle_reading_mid_gap_does_not_split_the_water_segment():
+    # Only an idle reading (or an elapsed PUMP_GAP_S) marks the pump as stopped: a
+    # non-idle heater-only reading (e.g. 1327 W) between two pump readings leaves
+    # the water segment open, by design.
+    det = Detector(BIANCA)
+    warm_on(det)
+    feed(det, [(400, 233, True), (405, 1327, True), (408, 233, True), (411, 1.5, True)])
+    assert det.pump_seconds == 11.0
+
+
+def test_no_draw_tank_empty_leaves_counters_unchanged():
+    det = Detector(BIANCA)
+    det.shots_since_refill = 3
+    det.pump_seconds = 45.0
+    feed(det, [(0, 1.7, True)])            # plug on, heating, never a draw
+    ev = ticks(det, 1, 4 * 60)             # past noDrawMin (3 min) with zero draw
+    empty = [e for e in ev if e["type"] == "tankEmpty"]
+    assert len(empty) == 1 and empty[0]["reason"] == "noDraw"
+    assert det.shots_since_refill == 3
+    assert det.pump_seconds == 45.0
+
+
+# ---- mark_refilled_after_empty (learns, unlike mark_refilled) -----------------
+
+def test_refilled_after_empty_learns_and_resets():
+    det = Detector(BIANCA)
+    det.pump_seconds, det.shots_since_refill, det.tank_low_fired = 250.4, 7, True
+    ev = det.mark_refilled_after_empty(T0)
+    assert types(ev) == ["tankRefilled"] and ev[0]["manual"] is True
+    assert ev[0]["learned"] is True and ev[0]["shots"] == 7 and ev[0]["pumpSeconds"] == 250
+    assert det.tank_history == [250.4]
+    assert det.pump_seconds == 0 and det.shots_since_refill == 0 and det.tank_low_fired is False
+
+
+def test_refilled_after_empty_below_floor_resets_without_learning():
+    det = Detector(BIANCA)
+    det.tank_history = [300.0]
+    det.pump_seconds, det.shots_since_refill = 100.0, 3      # floor = max(60, 150) = 150
+    ev = det.mark_refilled_after_empty(T0)
+    assert ev[0]["learned"] is False and ev[0]["pumpSeconds"] == 100
+    assert det.tank_history == [300.0] and det.pump_seconds == 0 and det.shots_since_refill == 0
+    det2 = Detector(BIANCA)
+    det2.pump_seconds = 59.0                                 # absolute floor, empty history
+    assert det2.mark_refilled_after_empty(T0)[0]["learned"] is False and det2.tank_history == []
+
+
+def test_refilled_after_empty_skips_untrusted_count_and_clears_flag():
+    det = Detector(BIANCA, saved={"pumpSeconds": 500.0})
+    assert det.skip_next_learn is True
+    ev = det.mark_refilled_after_empty(T0)
+    assert ev[0]["learned"] is False and det.tank_history == []
+    assert det.skip_next_learn is False and det.pump_seconds == 0
+
+
+def test_refilled_after_empty_keeps_last_three_and_never_fires_tank_empty():
+    det = Detector(BIANCA)
+    det.tank_history = [200.0, 210.0, 220.0]
+    det.pump_seconds = 230.0
+    ev = det.mark_refilled_after_empty(T0)
+    assert det.tank_history == [210.0, 220.0, 230.0]
+    assert types(ev) == ["tankRefilled"]
+
+
+def test_refilled_after_empty_restarts_heating_from_tank_empty():
+    det = Detector(BIANCA)
+    warm_on(det)
+    det.pump_seconds = 200.0
+    det._tank_empty(T0 + 500, "silence")
+    assert det.status == "tankEmpty"
+    det.pump_seconds = 200.0
+    det.mark_refilled_after_empty(T0 + 600)
+    assert det.status == "heating"
+
+
+def test_plain_mark_refilled_still_never_learns():
+    det = Detector(BIANCA)
+    det.pump_seconds = 400.0
+    ev = det.mark_refilled(T0)
+    assert det.tank_history == [] and "learned" not in ev[0]

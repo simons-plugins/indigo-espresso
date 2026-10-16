@@ -15,13 +15,27 @@
         </ConfigUI>
     </MenuItem>
     <MenuItem id="markTankRefilledMenu">
-        <Name>Mark tank refilled...</Name>
+        <Name>Mark tank topped up (no learning)...</Name>
         <ButtonTitle>Refilled</ButtonTitle>
         <CallbackMethod>markTankRefilledMenu</CallbackMethod>
         <ConfigUI>
             <Field id="machineId" type="menu">
                 <Label>Machine:</Label>
                 <List class="indigo.devices" filter="self.espressoMachine"/>
+            </Field>
+        </ConfigUI>
+    </MenuItem>
+    <MenuItem id="markTankRefilledAfterEmptyMenu">
+        <Name>Mark tank refilled after running empty...</Name>
+        <ButtonTitle>Refilled</ButtonTitle>
+        <CallbackMethod>markTankRefilledAfterEmptyMenu</CallbackMethod>
+        <ConfigUI>
+            <Field id="machineId" type="menu">
+                <Label>Machine:</Label>
+                <List class="indigo.devices" filter="self.espressoMachine"/>
+            </Field>
+            <Field id="help" type="label" fontSize="small" fontColor="darkgray">
+                <Label>Use when the tank ran dry but the plugin didn't notice. Learns this tankful for the Tank low warning.</Label>
             </Field>
         </ConfigUI>
     </MenuItem>

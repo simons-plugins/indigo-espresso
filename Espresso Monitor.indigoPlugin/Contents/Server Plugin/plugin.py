@@ -103,8 +103,16 @@ class Plugin(indigo.PluginBase):
 
     def _apply(self, dev, events, now):
         for event in events:
-            self.logger.info(f"{dev.name}: {event['type']}" +
-                             (f" ({event['seconds']} s)" if "seconds" in event else ""))
+            if event["type"] == "tankEmpty" and "shots" in event:
+                self.logger.info(f"{dev.name}: tank empty after {event['shots']} shots, "
+                                  f"{event['pumpSeconds']} pump-s")
+            elif event["type"] == "tankRefilled" and "learned" in event:
+                result = "learned tank" if event["learned"] else "not learned (below floor or count untrusted)"
+                self.logger.info(f"{dev.name}: tank refilled after running empty — {result}: "
+                                 f"{event['shots']} shots, {event['pumpSeconds']} pump-s")
+            else:
+                self.logger.info(f"{dev.name}: {event['type']}" +
+                                 (f" ({event['seconds']} s)" if "seconds" in event else ""))
             self._fire(event["type"], dev.id)
         self._write_states(dev, now)
 
@@ -130,6 +138,7 @@ class Plugin(indigo.PluginBase):
             "lastBackflush": _fmt(det.last_backflush),
             "daysSinceBackflush": days if days is not None else -1,
             "pumpSecondsSinceRefill": round(det.pump_seconds),
+            "shotsSinceRefill": det.shots_since_refill,
             "tankPercentUsed": tank_pct if tank_pct is not None else -1,
             "tankLearnedPumpSeconds": det.tank_learned_seconds() or 0,
             "detectorState": json.dumps(det.snapshot()),
@@ -180,6 +189,9 @@ class Plugin(indigo.PluginBase):
     def markTankRefilledAction(self, action, dev):
         self._mark_refilled(dev)
 
+    def markTankRefilledAfterEmptyAction(self, action, dev):
+        self._mark_refilled(dev, learn=True)
+
     def resetCountersAction(self, action, dev):
         det = self.detectors.get(dev.id)
         if det:
@@ -194,12 +206,21 @@ class Plugin(indigo.PluginBase):
         self._mark_refilled(dev)
         return True
 
-    def _mark_refilled(self, dev):
+    def markTankRefilledAfterEmptyMenu(self, valuesDict, typeId):
+        try:
+            dev = indigo.devices[int(valuesDict.get("machineId"))]
+        except (TypeError, ValueError, KeyError):
+            return False, valuesDict, {"machineId": "Choose a machine"}
+        self._mark_refilled(dev, learn=True)
+        return True
+
+    def _mark_refilled(self, dev, learn=False):
         det = self.detectors.get(dev.id)
         if det is None:
             return
         now = time.time()
-        self._apply(dev, det.mark_refilled(now), now)
+        events = det.mark_refilled_after_empty(now) if learn else det.mark_refilled(now)
+        self._apply(dev, events, now)
 
     # ---- config UI -------------------------------------------------------
     def powerDeviceMenu(self, filter="", valuesDict=None, typeId="", targetId=0):  # noqa: A002
