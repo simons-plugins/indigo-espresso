@@ -158,6 +158,29 @@ class Detector:
             self._start_heating(t, user=True)
         return [{"type": "tankRefilled", "t": t, "manual": True}]
 
+    def mark_refilled_after_empty(self, t):
+        """The user says the tank ran empty and they refilled it (the plugin never saw the
+        run-dry, e.g. keep-warm power masked it): learn this tankful, then refill as usual."""
+        shots, pump_seconds = self.shots_since_refill, round(self.pump_seconds)
+        learned = self._learn_tankful()
+        event = self.mark_refilled(t)[0]
+        event.update(shots=shots, pumpSeconds=pump_seconds, learned=learned)
+        return [event]
+
+    def _learn_tankful(self):
+        """Record pump_seconds as a tankful if trustworthy. Returns whether it was recorded."""
+        floor = max(MIN_TANKFUL_S, MIN_TANKFUL_SHARE * statistics.median(self.tank_history)) \
+            if self.tank_history else MIN_TANKFUL_S
+        if self.skip_next_learn:
+            # pump_seconds carries a count from before this run-dry that we can't
+            # trust (e.g. blip-inflated at a migration); don't learn from it.
+            self.skip_next_learn = False
+            return False
+        if self.pump_seconds >= floor:
+            self.tank_history = (self.tank_history + [self.pump_seconds])[-3:]
+            return True
+        return False
+
     def start_backflush(self, t):
         """The user says they are about to backflush: every pump run until the session
         ends counts as backflush, not shots. Power alone can't tell the two apart."""
@@ -369,14 +392,7 @@ class Detector:
     def _tank_empty(self, t, reason):
         self.status = "noDraw" if reason == "noDraw" else "tankEmpty"
         if reason != "noDraw":
-            floor = max(MIN_TANKFUL_S, MIN_TANKFUL_SHARE * statistics.median(self.tank_history)) \
-                if self.tank_history else MIN_TANKFUL_S
-            if self.skip_next_learn:
-                # pump_seconds carries a count from before this run-dry that we can't
-                # trust (e.g. blip-inflated at a migration); don't learn from it.
-                self.skip_next_learn = False
-            elif self.pump_seconds >= floor:
-                self.tank_history = (self.tank_history + [self.pump_seconds])[-3:]
+            self._learn_tankful()
             shots, pump_seconds = self.shots_since_refill, round(self.pump_seconds)
             self.pump_seconds = 0.0
             self.tank_low_fired = False

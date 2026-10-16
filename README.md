@@ -25,7 +25,7 @@ last backflush and days since, pump seconds since refill, tank % used.
 **Events** for ordinary Indigo triggers (each can be limited to one machine): Machine ready, Shot finished,
 Steaming finished, Backflush finished, Entered eco, Tank empty, Tank low, Tank refilled.
 
-**Actions:** Start backflush, Mark tank refilled, Reset shot and steam counters. Also **Plugins → Espresso Monitor → Start backflush…** and **Mark tank refilled…**
+**Actions:** Start backflush, Mark tank topped up (no learning), Mark tank refilled after running empty, Reset shot and steam counters. Also **Plugins → Espresso Monitor → Start backflush…** and **Mark tank topped up…** / **Mark tank refilled after running empty…**
 
 ## Setup
 
@@ -45,7 +45,7 @@ Steaming finished, Backflush finished, Entered eco, Tank empty, Tank low, Tank r
   pauses between cycles fall between readings (issue #3).
 - **Tank low** is learned. Each time the tank runs dry and is refilled, the plugin records how many pump-seconds
   that tank lasted and warns at 85 % of the median of the last three. It stays quiet until it has learned one
-  tankful. If you top up early, use **Mark tank refilled** — that resets the count without teaching the plugin a
+  tankful. If you top up early, use **Mark tank topped up (no learning)** — that resets the count without teaching the plugin a
   smaller tank.
 - The plug only reports when the reading changes, so the plugin also checks the clock every 10 seconds: eco and
   an empty tank are both *silence*. It tells them apart by timing — the machine goes to sleep a fixed time

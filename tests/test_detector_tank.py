@@ -435,3 +435,62 @@ def test_no_draw_tank_empty_leaves_counters_unchanged():
     assert len(empty) == 1 and empty[0]["reason"] == "noDraw"
     assert det.shots_since_refill == 3
     assert det.pump_seconds == 45.0
+
+
+# ---- mark_refilled_after_empty (learns, unlike mark_refilled) -----------------
+
+def test_refilled_after_empty_learns_and_resets():
+    det = Detector(BIANCA)
+    det.pump_seconds, det.shots_since_refill, det.tank_low_fired = 250.4, 7, True
+    ev = det.mark_refilled_after_empty(T0)
+    assert types(ev) == ["tankRefilled"] and ev[0]["manual"] is True
+    assert ev[0]["learned"] is True and ev[0]["shots"] == 7 and ev[0]["pumpSeconds"] == 250
+    assert det.tank_history == [250.4]
+    assert det.pump_seconds == 0 and det.shots_since_refill == 0 and det.tank_low_fired is False
+
+
+def test_refilled_after_empty_below_floor_resets_without_learning():
+    det = Detector(BIANCA)
+    det.tank_history = [300.0]
+    det.pump_seconds, det.shots_since_refill = 100.0, 3      # floor = max(60, 150) = 150
+    ev = det.mark_refilled_after_empty(T0)
+    assert ev[0]["learned"] is False and ev[0]["pumpSeconds"] == 100
+    assert det.tank_history == [300.0] and det.pump_seconds == 0 and det.shots_since_refill == 0
+    det2 = Detector(BIANCA)
+    det2.pump_seconds = 59.0                                 # absolute floor, empty history
+    assert det2.mark_refilled_after_empty(T0)[0]["learned"] is False and det2.tank_history == []
+
+
+def test_refilled_after_empty_skips_untrusted_count_and_clears_flag():
+    det = Detector(BIANCA, saved={"pumpSeconds": 500.0})
+    assert det.skip_next_learn is True
+    ev = det.mark_refilled_after_empty(T0)
+    assert ev[0]["learned"] is False and det.tank_history == []
+    assert det.skip_next_learn is False and det.pump_seconds == 0
+
+
+def test_refilled_after_empty_keeps_last_three_and_never_fires_tank_empty():
+    det = Detector(BIANCA)
+    det.tank_history = [200.0, 210.0, 220.0]
+    det.pump_seconds = 230.0
+    ev = det.mark_refilled_after_empty(T0)
+    assert det.tank_history == [210.0, 220.0, 230.0]
+    assert types(ev) == ["tankRefilled"]
+
+
+def test_refilled_after_empty_restarts_heating_from_tank_empty():
+    det = Detector(BIANCA)
+    warm_on(det)
+    det.pump_seconds = 200.0
+    det._tank_empty(T0 + 500, "silence")
+    assert det.status == "tankEmpty"
+    det.pump_seconds = 200.0
+    det.mark_refilled_after_empty(T0 + 600)
+    assert det.status == "heating"
+
+
+def test_plain_mark_refilled_still_never_learns():
+    det = Detector(BIANCA)
+    det.pump_seconds = 400.0
+    ev = det.mark_refilled(T0)
+    assert det.tank_history == [] and "learned" not in ev[0]

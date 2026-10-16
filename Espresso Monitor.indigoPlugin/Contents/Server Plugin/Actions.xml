@@ -5,8 +5,12 @@
         <CallbackMethod>startBackflushAction</CallbackMethod>
     </Action>
     <Action id="markTankRefilled" deviceFilter="self.espressoMachine">
-        <Name>Mark tank refilled</Name>
+        <Name>Mark tank topped up (no learning)</Name>
         <CallbackMethod>markTankRefilledAction</CallbackMethod>
+    </Action>
+    <Action id="markTankRefilledAfterEmpty" deviceFilter="self.espressoMachine">
+        <Name>Mark tank refilled after running empty</Name>
+        <CallbackMethod>markTankRefilledAfterEmptyAction</CallbackMethod>
     </Action>
     <Action id="resetCounters" deviceFilter="self.espressoMachine">
         <Name>Reset shot and steam counters</Name>

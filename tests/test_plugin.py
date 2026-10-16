@@ -135,3 +135,26 @@ def test_start_backflush_menu_needs_a_machine():
     assert p.startBackflushMenu({"machineId": ""}, "startBackflushMenu")[0] is False
     assert p.startBackflushMenu({"machineId": str(dev.id)}, "startBackflushMenu") is True
     assert json.loads(dev.states["detectorState"])["backflush"] is not None
+
+
+def test_refilled_after_empty_action_learns_logs_and_fires_trigger():
+    p = make_plugin()
+    dev = machine(p)
+    det = p.detectors[dev.id]
+    det.pump_seconds, det.shots_since_refill = 240.0, 6
+    p.triggerStartProcessing(Trig(1, "tankRefilled"))
+    p.markTankRefilledAfterEmptyAction(type("A", (), {"deviceId": dev.id})(), dev)
+    assert det.tank_history == [240.0]
+    msg = str(p.logger.info.call_args_list)
+    assert "tank refilled after running empty" in msg and "learned tank" in msg and "6 shots, 240 pump-s" in msg
+    assert [c.args[0].id for c in indigo.trigger.execute.call_args_list] == [1]
+
+
+def test_refilled_after_empty_menu_logs_not_learned_below_floor():
+    p = make_plugin()
+    dev = machine(p)
+    p.detectors[dev.id].pump_seconds = 10.0
+    ok = p.markTankRefilledAfterEmptyMenu({"machineId": str(dev.id)}, "markTankRefilledAfterEmptyMenu")
+    assert ok is True and p.detectors[dev.id].tank_history == []
+    assert "not learned" in str(p.logger.info.call_args_list)
+    assert p.markTankRefilledAfterEmptyMenu({"machineId": ""}, "x")[0] is False

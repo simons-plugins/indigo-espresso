@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026.1.1
+- New **Mark tank refilled after running empty** action and menu item: use it when the tank ran dry but the plugin never noticed (keep-warm power can mask it). It learns this tankful, then refills. The existing mark-refilled action keeps its id but is now named **Mark tank topped up (no learning)**.
+
 ## 2026.1.0
 - Fix: isolated pump-band readings between keep-warm heater bursts no longer count as water. On real Bianca data (3-7 Oct), these blips were ~80% of the counted pump time (~1,357 of 1,689 s); real shots and flushes were ~300 s. Water is now only credited for a run of pump readings with nothing idle in between.
 - New **Shots since refill** counter, alongside pump seconds since refill.
